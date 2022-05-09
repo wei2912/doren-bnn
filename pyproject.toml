@@ -1,18 +1,20 @@
+[tool.poetry]
+name = "doren-bnn"
+version = "0.1.0"
+description = ""
+authors = ["Ng Wei En <weien1292@gmail.com>"]
+license = "MIT License"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+torch = "1.10.2"
+torchvision = "0.11.3"
+
+[tool.poetry.dev-dependencies]
+black = "^22.3.0"
+flake8 = "^4.0.1"
+pre-commit = "^2.19.0"
+
 [build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
-
-[project]
-name = "doren_bnn"
-authors = [{name = "Ng Wei En", email = "weien1292@gmail.com"}]
-readme = "README.md"
-license = {file = "LICENSE"}
-classifiers = ["License :: OSI Approved :: MIT License"]
-dynamic = ["version", "description"]
-dependencies = [
-  "torch == 1.10.2",
-  "torchvision == 0.11.3",
-]
-
-[project.optional-dependencies]
-dev = ["black", "flake8", "pre-commit"]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
