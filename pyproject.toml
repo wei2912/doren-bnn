@@ -6,7 +6,7 @@ authors = ["Ng Wei En <weien1292@gmail.com>"]
 license = "MIT License"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "~3.9"
 torch = "1.11.0"
 torchvision = "0.12.0"
 torchinfo = "^1.6.5"
