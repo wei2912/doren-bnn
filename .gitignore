@@ -130,4 +130,5 @@ dmypy.json
 
 # Repository-specific files
 data/
+helib/build/
 runs/
