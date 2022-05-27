@@ -1,7 +1,0 @@
-{
-  "cmake.sourceDirectory": "${workspaceFolder}/helib",
-  "cmake.buildDirectory": "${workspaceFolder}/helib/build",
-  "cmake.configureSettings": {
-    "helib_DIR": "/usr/local/helib_pack/share/cmake/helib"
-  }
-}
