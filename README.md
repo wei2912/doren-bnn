@@ -16,7 +16,8 @@ poetry install
 
 ### `pre-commit` Setup
 
-To enable the use of Git pre-commit hooks, install the [`pre-commit`](https://pre-commit.com/) package with the following command:
+To enable the use of Git pre-commit hooks, install the
+[`pre-commit`](https://pre-commit.com/) package with the following command:
 
 ```bash
 pre-commit install
