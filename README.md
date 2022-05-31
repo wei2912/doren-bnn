@@ -22,3 +22,9 @@ To enable the use of Git pre-commit hooks, install the
 ```bash
 pre-commit install
 ```
+
+### CONCRETE Setup
+
+To set up the [CONCRETE library](https://www.zama.ai/concrete-framework), please follow
+the instructions at [https://docs.zama.ai/concrete/lib/user/installation.html]. Take
+note that the library is only supported on macOS and Linux.
