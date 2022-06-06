@@ -28,3 +28,13 @@ pre-commit install
 To set up the [CONCRETE library](https://www.zama.ai/concrete-framework), please follow
 the instructions at [https://docs.zama.ai/concrete/lib/user/installation.html]. Take
 note that the library is only supported on macOS and Linux.
+
+## Compiling Packages
+
+### `doren-bnn-concrete`
+
+To compile the package, run the following command:
+
+```bash
+RUSTCFLAGS="target-cpu=native" cargo run --release
+```
