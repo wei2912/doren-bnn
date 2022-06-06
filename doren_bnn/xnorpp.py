@@ -12,7 +12,7 @@ class Sign(Function):
     XNOR-Net.
 
     For an input $r$,
-    Forward pass: $\text{sign}(r)$, where $\text{sign}(x_r) = 1$ if $x_r > 0$ and $-1$
+    Forward pass: $\text{sign}(r)$, where $\text{sign}(r) = 1$ if $r > 0$, and $-1$
     otherwise.
     Backward pass: $\frac{\del \text{sign}}{\del r} = r1_{|r| \leq 1}$
     """

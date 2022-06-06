@@ -6,7 +6,7 @@ import torch.nn as nn
 from torchinfo import summary
 from sklearn.metrics import top_k_accuracy_score
 from tqdm import trange
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import StepLR
 import torch
 
@@ -14,7 +14,7 @@ import argparse
 from pathlib import Path
 import time
 
-from doren_bnn.mobilenet import MobileNet
+from doren_bnn.mobilenet import MobileNet, NetType
 
 parser = argparse.ArgumentParser(description="doren_bnn experiments")
 parser.add_argument(
@@ -27,6 +27,12 @@ parser.add_argument(
     default=False,
     action=argparse.BooleanOptionalAction,
     help="resume from latest checkpoint?",
+)
+parser.add_argument(
+    "--nettype",
+    default=NetType.REAL,
+    choices=[x.value for x in NetType._member_map_.values()],
+    help="type of network",
 )
 
 
@@ -68,9 +74,10 @@ def main(**kwargs):
         val_set, sampler=RandomSampler(val_set, num_samples=500), **loader_params
     )
 
-    model = nn.Sequential(MobileNet(3, 224, num_classes=10, binarized=True)).cuda()
+    nettype = NetType(kwargs["nettype"])
+    model = nn.Sequential(MobileNet(3, 224, num_classes=10, nettype=nettype)).cuda()
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = Adam(model.parameters(), lr=1e-3)
+    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
     scheduler = StepLR(optimizer, 25, gamma=0.1)
 
     summary(model, input_size=(batch_size, 3, 224, 224))
