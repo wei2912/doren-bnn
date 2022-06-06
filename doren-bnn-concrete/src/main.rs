@@ -8,8 +8,8 @@ const BASE_LOG: usize = 3;
 const LEVEL: usize = 5;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let encoder = Encoder::new_rounding_context(-1.0, 1.0, 1, 3)?;
-    let messages = vec![-0.56, 0.23, 0.98, 0.0];
+    let encoder = Encoder::new(-1.0, 1.0, 5, 5)?;
+    let messages = vec![-1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0];
 
     println!("Before encoding: {:?}", messages);
 
@@ -28,12 +28,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         let sk_out = LWESecretKey::load(SK_OUT_PATH)?;
         let bsk = LWEBSK::load(BSK_PATH);
 
+        println!("{} {}", sk_out.dimension, bsk.polynomial_size);
+
         println!("Existing secret keys loaded.");
         (sk_out, bsk)
     } else {
         println!("Generating secret keys...");
-        let sk_rlwe = RLWESecretKey::new(&RLWE128_1024_1);
-        let sk_in = LWESecretKey::new(&LWE128_1024);
+
+        let rlwe_params = RLWE80_1024_1;
+        let lwe_params = LWE80_1024;
+
+        let sk_rlwe = RLWESecretKey::new(&rlwe_params);
+        let sk_in = LWESecretKey::new(&lwe_params);
         let sk_out = sk_rlwe.to_lwe_secret_key();
 
         let bsk = LWEBSK::new(&sk_in, &sk_rlwe, BASE_LOG, LEVEL);
@@ -44,33 +50,39 @@ fn main() -> Result<(), Box<dyn Error>> {
         (sk_out, bsk)
     };
 
-    let c1 = &messages
-        .into_iter()
-        .map(|m| LWE::encode_encrypt(&sk_out, m, &encoder))
-        .collect::<Result<Vec<_>, _>>()?;
-    let o1 = &c1
-        .into_iter()
-        .map(|c| c.decrypt_decode(&sk_out))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut c1 = VectorLWE::encode_encrypt(&sk_out, &messages, &encoder)?;
+    let o1 = c1.decrypt_decode(&sk_out)?;
     println!("After encryption + decryption: {:?}", o1);
+    println!("{:?}", c1.encoders[0]);
 
-    let c2 = &c1.clone();
+    let weights = vec![1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0];
+    for i in 0..weights.len() - 1 {
+        // only negate ciphertext bits with corresponding weight -1
+        if weights[i] == -1.0 {
+            c1.opposite_nth_inplace(i)?;
+        }
+    }
+    let o1 = c1.decrypt_decode(&sk_out)?;
+    println!("Weights: {:?}", weights);
+    println!("After weighting: {:?}", o1);
+    println!("{:?}", c1.encoders[0]);
 
-    let c3 = &c1
-        .into_iter()
-        .zip(c2.into_iter())
-        .map(|(x, y)| x.mul_from_bootstrap(&y, &bsk))
-        .collect::<Result<Vec<_>, _>>()?;
-    let o3 = &c3
-        .into_iter()
-        .map(|c| c.decrypt_decode(&sk_out))
-        .collect::<Result<Vec<_>, _>>()?;
+    let c1_sum = c1.sum_with_padding()?;
+    let o1_sum = c1_sum.decrypt_decode(&sk_out)?;
+    println!("Sum: {:?}", o1_sum);
+    println!("{:?}", c1_sum.encoders[0]);
 
-    println!("Self-multiplication + bootstrap: {:?}", o3);
-
-    println!("{:?}", &c1[0].encoder);
-    println!("{:?}", &c2[0].encoder);
-    println!("{:?}", &c3[0].encoder);
+    const THRESHOLD: f64 = 2.0; // arbitrary threshold as "learnable parameter"
+    let c2 = c1_sum.bootstrap_nth_with_function(
+        &bsk,
+        |x| if x >= THRESHOLD { 1.0 } else { -1.0 },
+        &encoder,
+        0,
+    )?;
+    let o2 = c2.decrypt_decode(&sk_out)?;
+    println!("Threshold: {:?}", THRESHOLD);
+    println!("ReLU + bootstrap: {:?}", o2);
+    println!("{:?}", c2.encoders[0]);
 
     Ok(())
 }
