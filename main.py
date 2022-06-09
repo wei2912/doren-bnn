@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description="doren_bnn experiments")
 parser.add_argument(
     "--num-epochs", default=80, type=int, help="number of epochs to run"
 )
-parser.add_argument("-b", "--batch-size", default=256, type=int, help="mini-batch size")
+parser.add_argument("-b", "--batch-size", default=32, type=int, help="mini-batch size")
 parser.add_argument("--id", nargs="?", type=str, help="experiment id")
 parser.add_argument(
     "--resume",
@@ -180,5 +180,4 @@ def validate(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-
     main(**vars(args))
