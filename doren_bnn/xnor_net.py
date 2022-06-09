@@ -28,42 +28,35 @@ class Sign(Function):
         return grad_output.clone() * input.le(1) * input.ge(-1)
 
 
-class Conv2d_XnorPP(Module):
+class Conv2d_XNorNetPP(Module):
     """
-    Implement convolutional layer with binary weights and activations, following Case 4
-    of XNOR-Net++.
+    Implement convolutional layer with binary weights and activations, following Case 1
+    of XNOR-Net++ with channel-wise scaling.
     """
 
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int,
-        in_size: int,
-        **kwargs
-    ):
-        super(Conv2d_XnorPP, self).__init__()
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, **kwargs):
+        super(Conv2d_XNorNetPP, self).__init__()
 
         if kwargs["bias"]:
-            raise NotImplementedError("bias is not supported on Conv2d_XnorPP")
+            raise NotImplementedError(
+                "bias is not supported on {self.__class__.__name__}"
+            )
         del kwargs["bias"]
 
         self.conv2d_params = kwargs
         conv2d = Conv2d(
-            in_channels, out_channels, kernel_size, bias=False, **self.conv2d_params
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            bias=False,
+            **self.conv2d_params
         )
 
         self.weight = Parameter(conv2d.weight.detach())
-
-        x = torch.zeros((in_channels, in_size, in_size))
-        out_channels, out_width, out_height = conv2d(x).size()
-
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
-        self.beta = Parameter(torch.ones(out_width).reshape(1, -1, 1))
-        self.gamma = Parameter(torch.ones(out_height).reshape(1, 1, -1))
 
     def forward(self, input: Tensor) -> Tensor:
         input = F.conv2d(
             Sign.apply(input), Sign.apply(self.weight), **self.conv2d_params
         )
-        return input.mul(self.alpha).mul(self.beta).mul(self.gamma)
+        return input.mul(self.alpha)

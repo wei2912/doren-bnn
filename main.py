@@ -7,18 +7,18 @@ from torchinfo import summary
 from sklearn.metrics import top_k_accuracy_score
 from tqdm import trange
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import torch
 
 import argparse
 from pathlib import Path
 import time
 
-from doren_bnn.mobilenet import MobileNet, NetType
+from doren_bnn.resnet import ResNet18, NetType
 
 parser = argparse.ArgumentParser(description="doren_bnn experiments")
 parser.add_argument(
-    "--num-epochs", default=80, type=int, help="number of epochs to run"
+    "--num-epochs", default=150, type=int, help="number of epochs to run"
 )
 parser.add_argument("-b", "--batch-size", default=32, type=int, help="mini-batch size")
 parser.add_argument("--id", nargs="?", type=str, help="experiment id")
@@ -75,10 +75,12 @@ def main(**kwargs):
     )
 
     nettype = NetType(kwargs["nettype"])
-    model = nn.Sequential(MobileNet(3, 224, num_classes=10, nettype=nettype)).cuda()
+    num_epochs = kwargs["num_epochs"]
+
+    model = nn.Sequential(ResNet18(num_classes=10, nettype=nettype)).cuda()
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    scheduler = StepLR(optimizer, 25, gamma=0.1)
+    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=5e-6)
+    scheduler = CosineAnnealingLR(optimizer, num_epochs)
 
     summary(model, input_size=(batch_size, 3, 224, 224))
 
@@ -88,7 +90,6 @@ def main(**kwargs):
         cp = load_checkpoint(cp_path, model, optimizer, scheduler)
         last_epoch = cp["epoch"]
 
-    num_epochs = kwargs["num_epochs"]
     for epoch in trange(last_epoch + 1, num_epochs):
         train(train_loader, writer, model, criterion, optimizer, epoch)
         val_loss = validate(val_loader, writer, model, criterion, epoch)
