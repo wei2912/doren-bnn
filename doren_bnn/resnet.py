@@ -18,6 +18,7 @@ from doren_bnn.xnor_net import Conv2d_XNorNetPP
 class NetType(Enum):
     REAL = "Real"
     BI_REAL = "Bi-Real"
+    BI_REAL_GROUPED = "Bi-Real_Grouped"
 
 
 class InitialBlock(Module):
@@ -25,9 +26,10 @@ class InitialBlock(Module):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int = 7,
-        stride: int = 2,
-        padding: int = 3,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        groups: int = 1,
         nettype: NetType = NetType.REAL,
     ) -> None:
         super(InitialBlock, self).__init__()
@@ -36,6 +38,7 @@ class InitialBlock(Module):
             "kernel_size": kernel_size,
             "stride": stride,
             "padding": padding,
+            "groups": groups,
             "bias": False,
         }
 
@@ -46,6 +49,10 @@ class InitialBlock(Module):
                 BatchNorm2d(out_channels),
             ),
             NetType.BI_REAL: Sequential(
+                Conv2d_XNorNetPP(in_channels, out_channels, **conv_params),
+                BatchNorm2d(out_channels),
+            ),
+            NetType.BI_REAL_GROUPED: Sequential(
                 Conv2d_XNorNetPP(in_channels, out_channels, **conv_params),
                 BatchNorm2d(out_channels),
             ),
@@ -65,11 +72,17 @@ class BasicBlock(Module):
         kernel_size: int,
         stride: int = 1,
         padding: int = 0,
+        groups: int = 1,
         nettype: NetType = NetType.REAL,
     ) -> None:
         super(BasicBlock, self).__init__()
 
-        conv_params = {"kernel_size": kernel_size, "padding": padding, "bias": False}
+        conv_params = {
+            "kernel_size": kernel_size,
+            "padding": padding,
+            "groups": groups,
+            "bias": False,
+        }
 
         self.nettype = nettype
         self.block1 = {
@@ -83,6 +96,12 @@ class BasicBlock(Module):
                 ),
                 BatchNorm2d(out_channels),
             ),
+            NetType.BI_REAL_GROUPED: Sequential(
+                Conv2d_XNorNetPP(
+                    in_channels, out_channels, stride=stride, **conv_params
+                ),
+                BatchNorm2d(out_channels),
+            ),
         }[nettype]
         self.prelu1 = PReLU()
         self.block2 = {
@@ -91,6 +110,10 @@ class BasicBlock(Module):
                 BatchNorm2d(out_channels),
             ),
             NetType.BI_REAL: Sequential(
+                Conv2d_XNorNetPP(out_channels, out_channels, stride=1, **conv_params),
+                BatchNorm2d(out_channels),
+            ),
+            NetType.BI_REAL_GROUPED: Sequential(
                 Conv2d_XNorNetPP(out_channels, out_channels, stride=1, **conv_params),
                 BatchNorm2d(out_channels),
             ),
@@ -111,7 +134,7 @@ class BasicBlock(Module):
             identity = x if self.downsample is None else self.downsample(x)
             out2 = self.block2(self.prelu1(self.block1(x)))
             return self.prelu2(out2 + identity)
-        elif self.nettype == NetType.BI_REAL:
+        elif self.nettype == NetType.BI_REAL or self.nettype == NetType.BI_REAL_GROUPED:
             identity1 = x if self.downsample is None else self.downsample(x)
             out1 = self.prelu1(self.block1(x) + identity1)
             return self.prelu2(self.block2(out1) + out1)
@@ -124,17 +147,45 @@ class ResNet18(Module):
         kwargs_real = kwargs.copy()
         kwargs_real["nettype"] = NetType.REAL
 
+        nettype = kwargs["nettype"]
+
+        groups = (
+            [1, 1, 1, 1] if nettype != NetType.BI_REAL_GROUPED else [16, 32, 32, 64]
+        )
+
+        self.block1 = InitialBlock(
+            3, 64, kernel_size=7, stride=2, padding=3, **kwargs_real
+        )
+        self.block2 = Sequential(
+            BasicBlock(64, 64, kernel_size=3, padding=1, groups=groups[0], **kwargs),
+            BasicBlock(64, 64, kernel_size=3, padding=1, groups=groups[0], **kwargs),
+        )
+        self.block3 = Sequential(
+            BasicBlock(
+                64, 128, kernel_size=3, stride=2, padding=1, groups=groups[1], **kwargs
+            ),
+            BasicBlock(128, 128, kernel_size=3, padding=1, groups=groups[1], **kwargs),
+        )
+        self.block4 = Sequential(
+            BasicBlock(
+                128, 256, kernel_size=3, stride=2, padding=1, groups=groups[2], **kwargs
+            ),
+            BasicBlock(256, 256, kernel_size=3, padding=1, groups=groups[2], **kwargs),
+        )
+        self.block5 = Sequential(
+            BasicBlock(
+                256, 512, kernel_size=3, stride=2, padding=1, groups=groups[3], **kwargs
+            ),
+            BasicBlock(512, 512, kernel_size=3, padding=1, groups=groups[3], **kwargs),
+        )
+
         self.model = Sequential(
-            InitialBlock(3, 64, **kwargs_real),
+            self.block1,
             MaxPool2d(3, stride=2, padding=1),
-            BasicBlock(64, 64, kernel_size=3, padding=1, **kwargs),
-            BasicBlock(64, 64, kernel_size=3, padding=1, **kwargs),
-            BasicBlock(64, 128, kernel_size=3, stride=2, padding=1, **kwargs),
-            BasicBlock(128, 128, kernel_size=3, padding=1, **kwargs),
-            BasicBlock(128, 256, kernel_size=3, stride=2, padding=1, **kwargs),
-            BasicBlock(256, 256, kernel_size=3, padding=1, **kwargs),
-            BasicBlock(256, 512, kernel_size=3, stride=2, padding=1, **kwargs),
-            BasicBlock(512, 512, kernel_size=3, padding=1, **kwargs),
+            self.block2,
+            self.block3,
+            self.block4,
+            self.block5,
             AdaptiveAvgPool2d(1),
         )
         self.fc = Linear(512, num_classes)
