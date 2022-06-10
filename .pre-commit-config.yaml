@@ -25,8 +25,8 @@ repos:
     rev: v1.0
     hooks:
       - id: fmt
-        args: [--manifest-path, ./doren-bnn-concrete/Cargo.toml, --]
+        args: [--manifest-path, ./doren_bnn_concrete/Cargo.toml, --]
       - id: cargo-check
-        args: [--manifest-path, ./doren-bnn-concrete/Cargo.toml]
+        args: [--manifest-path, ./doren_bnn_concrete/Cargo.toml]
       - id: clippy
-        args: [--manifest-path, ./doren-bnn-concrete/Cargo.toml]
+        args: [--manifest-path, ./doren_bnn_concrete/Cargo.toml]

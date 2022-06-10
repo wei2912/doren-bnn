@@ -1,0 +1,12 @@
+[package]
+name = "doren_bnn_concrete"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "doren_bnn_concrete"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+concrete = "=0.1.11"
+pyo3 = { version = "^0.16.5", features = ["extension-module"] }
