@@ -131,3 +131,4 @@ dmypy.json
 # Repository-specific files
 data/
 runs/
+sk/

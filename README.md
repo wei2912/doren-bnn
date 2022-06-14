@@ -31,10 +31,22 @@ note that the library is only supported on macOS and Linux.
 
 ## Compiling Packages
 
-### `doren-bnn-concrete`
+### `doren_bnn_concrete`
 
-To compile the package, run the following command:
+To run the executable in the library, run the following commands from the root
+directory:
 
 ```bash
+cd doren_bnn_concrete
 RUSTCFLAGS="target-cpu=native" cargo run --release
 ```
+
+To build and install the Python bindings, run the following commands from the root
+directory:
+
+```bash
+cd doren_bnn_concrete
+RUSTCFLAGS="target-cpu=native" maturin develop --release
+```
+
+You can now import the package `doren_bnn_concrete` from the root directory.

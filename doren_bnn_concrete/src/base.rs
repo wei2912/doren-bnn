@@ -1,7 +1,7 @@
-use bitvec::prelude::BitVec;
 use concrete::*;
 
 use std::error::Error;
+use std::fs;
 use std::path::Path;
 
 const LWE_PARAMS: LWEParams = LWE128_750;
@@ -41,6 +41,8 @@ pub fn load_keys(sk_path_str: &str) -> Result<(LWESecretKey, LWEKSK, LWEBSK), Bo
     } else {
         println!("Generating secret keys...");
 
+        fs::create_dir_all(sk_path)?;
+
         let sk_rlwe = RLWESecretKey::new(&RLWE_PARAMS);
         let sk_in = LWESecretKey::new(&LWE_PARAMS);
         let sk_lwe = sk_rlwe.to_lwe_secret_key();
@@ -57,25 +59,44 @@ pub fn load_keys(sk_path_str: &str) -> Result<(LWESecretKey, LWEKSK, LWEBSK), Bo
     }
 }
 
-pub fn convert_bin_to_pm1(input: &BitVec) -> Vec<f64> {
+pub fn convert_bin_to_pm1(input: &Vec<bool>) -> Vec<f64> {
     input
         .into_iter()
         .map(|b| if *b { 1.0 } else { -1.0 })
         .collect()
 }
 
-pub fn convert_pm1_to_bin(input: &Vec<f64>) -> BitVec {
-    input.into_iter().map(|x| *x >= 0.0).collect()
+pub fn convert_f64_to_bin(input: &Vec<f64>) -> Vec<bool> {
+    input.into_iter().map(|x| *x > 0.0).collect()
+}
+
+pub fn new_encoder(nb_bit_precision: usize) -> Result<Encoder, Box<dyn Error>> {
+    assert!(nb_bit_precision < 4);
+    Ok(Encoder::new(
+        -1.0,
+        1.0,
+        nb_bit_precision,
+        12 - nb_bit_precision,
+    )?)
 }
 
 pub fn new_encoder_bin() -> Result<Encoder, Box<dyn Error>> {
-    Ok(Encoder::new(-1.0, 1.0, 1, 7)?)
+    Ok(new_encoder(1)?)
 }
 
-pub fn encrypt_bin(sk_lwe: &LWESecretKey, input: &BitVec) -> Result<VectorLWE, Box<dyn Error>> {
-    let encoder = new_encoder_bin()?;
-    let output = VectorLWE::encode_encrypt(sk_lwe, &convert_bin_to_pm1(input), &encoder)?;
+pub fn encrypt(
+    sk_lwe: &LWESecretKey,
+    input: &Vec<f64>,
+    encoder: &Encoder,
+) -> Result<VectorLWE, Box<dyn Error>> {
+    let output = VectorLWE::encode_encrypt(sk_lwe, &input, &encoder)?;
     Ok(output)
+}
+
+pub fn encrypt_bin(sk_lwe: &LWESecretKey, input: &Vec<bool>) -> Result<VectorLWE, Box<dyn Error>> {
+    let encoder = new_encoder_bin()?;
+    let input_pm1 = convert_bin_to_pm1(input);
+    Ok(encrypt(sk_lwe, &input_pm1, &encoder)?)
 }
 
 pub fn decrypt(sk_lwe: &LWESecretKey, input: &VectorLWE) -> Result<Vec<f64>, Box<dyn Error>> {

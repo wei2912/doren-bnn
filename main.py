@@ -7,18 +7,20 @@ from torchinfo import summary
 from sklearn.metrics import top_k_accuracy_score
 from tqdm import trange
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 import torch
 
 import argparse
 from pathlib import Path
 import time
 
-from doren_bnn.mobilenet import MobileNet, NetType
+# from doren_bnn.mobilenet import MobileNet, NetType
+from doren_bnn.mobilenet import NetType
+from doren_bnn.toynet import ToyNet, ToyNet_FHE
 
 parser = argparse.ArgumentParser(description="doren_bnn experiments")
 parser.add_argument(
-    "--num-epochs", default=80, type=int, help="number of epochs to run"
+    "--num-epochs", default=120, type=int, help="number of epochs to run"
 )
 parser.add_argument("-b", "--batch-size", default=32, type=int, help="mini-batch size")
 parser.add_argument("--id", nargs="?", type=str, help="experiment id")
@@ -55,7 +57,8 @@ def main(**kwargs):
     transform = Compose(
         [
             Resize(256),
-            CenterCrop(224),
+            # CenterCrop(224),
+            CenterCrop(8),
             ToTensor(),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
@@ -75,12 +78,18 @@ def main(**kwargs):
     )
 
     nettype = NetType(kwargs["nettype"])
-    model = nn.Sequential(MobileNet(3, num_classes=10, nettype=nettype)).cuda()
-    criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    scheduler = StepLR(optimizer, 25, gamma=0.1)
+    num_epochs = kwargs["num_epochs"]
 
-    summary(model, input_size=(batch_size, 3, 224, 224))
+    print(nettype)
+
+    # model = MobileNet(3, num_classes=10, nettype=nettype).cuda()
+    model = ToyNet(num_classes=10).cuda()
+    criterion = nn.CrossEntropyLoss().cuda()
+    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=5e-6)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, 30)
+
+    # summary(model, input_size=(batch_size, 3, 224, 224))
+    summary(model, input_size=(batch_size, 3, 8, 8))
 
     if not kwargs["resume"]:
         last_epoch = -1
@@ -88,7 +97,6 @@ def main(**kwargs):
         cp = load_checkpoint(cp_path, model, optimizer, scheduler)
         last_epoch = cp["epoch"]
 
-    num_epochs = kwargs["num_epochs"]
     for epoch in trange(last_epoch + 1, num_epochs):
         train(train_loader, writer, model, criterion, optimizer, epoch)
         val_loss = validate(val_loader, writer, model, criterion, epoch)
@@ -98,6 +106,10 @@ def main(**kwargs):
         scheduler.step()
 
         save_checkpoint(cp_path, model, optimizer, scheduler, val_loss, epoch)
+
+    model_fhe = ToyNet_FHE(num_classes=10)
+    cp = load_checkpoint(cp_path, model_fhe, optimizer, scheduler)
+    test_fhe(val_loader, writer, model_fhe)
 
 
 def save_checkpoint(path, model, optimizer, scheduler, val_loss: float, epoch: int):
@@ -169,13 +181,46 @@ def validate(
         outputs.extend(output.squeeze().tolist())
         targets.extend(target.tolist())
 
+        print(output)
+        break
+
     loss_mean = sum(losses) / len(losses)
-    writer.add_scalar("Test/loss", loss_mean, epoch)
-    writer.add_scalar("Test/top-1", top_k_accuracy_score(targets, outputs, k=1), epoch)
-    writer.add_scalar("Test/top-5", top_k_accuracy_score(targets, outputs, k=5), epoch)
+    writer.add_scalar("Val/loss", loss_mean, epoch)
+    writer.add_scalar(
+        "Val/top-1",
+        top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),
+        epoch,
+    )
+    writer.add_scalar(
+        "Val/top-5",
+        top_k_accuracy_score(targets, outputs, k=5, labels=range(10)),
+        epoch,
+    )
     writer.flush()
 
     return loss_mean
+
+
+def test_fhe(test_loader: DataLoader, writer: SummaryWriter, model):
+    model.eval()
+
+    outputs = []
+    targets = []
+    for (input, target) in test_loader:
+        output = model(input)
+        outputs.extend(output.squeeze().tolist())
+        targets.extend(target.tolist())
+
+        print(output)
+        break
+
+    writer.add_scalar(
+        "Test/top-1", top_k_accuracy_score(targets, outputs, k=1, labels=range(10)), -1
+    )
+    writer.add_scalar(
+        "Test/top-5", top_k_accuracy_score(targets, outputs, k=5, labels=range(10)), -1
+    )
+    writer.flush()
 
 
 if __name__ == "__main__":
