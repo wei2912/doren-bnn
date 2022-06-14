@@ -75,7 +75,7 @@ def main(**kwargs):
     )
 
     nettype = NetType(kwargs["nettype"])
-    model = nn.Sequential(MobileNet(3, 224, num_classes=10, nettype=nettype)).cuda()
+    model = nn.Sequential(MobileNet(3, num_classes=10, nettype=nettype)).cuda()
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
     scheduler = StepLR(optimizer, 25, gamma=0.1)

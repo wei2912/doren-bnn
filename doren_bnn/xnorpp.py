@@ -30,18 +30,11 @@ class Sign(Function):
 
 class Conv2d_XnorPP(Module):
     """
-    Implement convolutional layer with binary weights and activations, following Case 4
+    Implement convolutional layer with binary weights and activations, following Case 2
     of XNOR-Net++.
     """
 
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: int,
-        in_size: int,
-        **kwargs
-    ):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, **kwargs):
         super(Conv2d_XnorPP, self).__init__()
 
         if kwargs["bias"]:
@@ -54,16 +47,10 @@ class Conv2d_XnorPP(Module):
         )
 
         self.weight = Parameter(conv2d.weight.detach())
-
-        x = torch.zeros((in_channels, in_size, in_size))
-        out_channels, out_width, out_height = conv2d(x).size()
-
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
-        self.beta = Parameter(torch.ones(out_width).reshape(1, -1, 1))
-        self.gamma = Parameter(torch.ones(out_height).reshape(1, 1, -1))
 
     def forward(self, input: Tensor) -> Tensor:
         input = F.conv2d(
             Sign.apply(input), Sign.apply(self.weight), **self.conv2d_params
         )
-        return input.mul(self.alpha).mul(self.beta).mul(self.gamma)
+        return input.mul(self.alpha)

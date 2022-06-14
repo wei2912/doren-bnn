@@ -27,7 +27,6 @@ class MobileNet_ConvBlock(Module):
         in_channels: int,
         out_channels: int,
         stride: int,
-        in_size: int,
         nettype: NetType,
     ):
         super(MobileNet_ConvBlock, self).__init__()
@@ -42,7 +41,7 @@ class MobileNet_ConvBlock(Module):
             ),
             NetType.XNORPP: Sequential(
                 BatchNorm2d(in_channels),
-                Conv2d_XnorPP(in_channels, out_channels, 3, in_size, **block_params),
+                Conv2d_XnorPP(in_channels, out_channels, 3, **block_params),
                 ReLU(inplace=True),
             ),
             NetType.XNOR_REACT: Sequential(
@@ -62,7 +61,6 @@ class MobileNet_ConvDsBlock(Module):
         in_channels: int,
         out_channels: int,
         stride: int,
-        in_size: int,
         nettype: NetType,
     ):
         super(MobileNet_ConvDsBlock, self).__init__()
@@ -86,7 +84,7 @@ class MobileNet_ConvDsBlock(Module):
             ),
             NetType.XNOR_REACT: Sequential(
                 BatchNorm2d(in_channels),
-                Conv2d(in_channels, in_channels, 3, **block_dw_params),
+                Conv2d_Xnor_ReAct(in_channels, in_channels, 3, **block_dw_params),
                 RPReLU(),
             ),
         }[nettype]
@@ -100,14 +98,12 @@ class MobileNet_ConvDsBlock(Module):
             ),
             NetType.XNORPP: Sequential(
                 BatchNorm2d(in_channels),
-                Conv2d_XnorPP(
-                    in_channels, out_channels, 1, in_size // stride, **block_pw_params
-                ),
+                Conv2d_XnorPP(in_channels, out_channels, 1, **block_pw_params),
                 ReLU(inplace=True),
             ),
             NetType.XNOR_REACT: Sequential(
                 BatchNorm2d(in_channels),
-                Conv2d_Xnor_ReAct(in_channels, out_channels, 1, **block_pw_params),
+                Conv2d_Xnor_ReAct(in_channels, out_channels, 1, **block_dw_params),
                 RPReLU(),
             ),
         }[nettype]
@@ -119,29 +115,27 @@ class MobileNet_ConvDsBlock(Module):
 
 
 class MobileNet(Module):
-    def __init__(
-        self, in_channels: int, in_size: int, num_classes: int = 1000, **kwargs
-    ):
+    def __init__(self, in_channels: int, num_classes: int = 1000, **kwargs):
         super(MobileNet, self).__init__()
 
         kwargs_real = {**kwargs}
         kwargs_real["nettype"] = NetType.REAL
 
         self.model = Sequential(
-            MobileNet_ConvBlock(in_channels, 32, 2, in_size, **kwargs_real),
-            MobileNet_ConvDsBlock(32, 64, 1, in_size // 2, **kwargs),
-            MobileNet_ConvDsBlock(64, 128, 2, in_size // 2, **kwargs),
-            MobileNet_ConvDsBlock(128, 128, 1, in_size // 4, **kwargs),
-            MobileNet_ConvDsBlock(128, 256, 2, in_size // 4, **kwargs),
-            MobileNet_ConvDsBlock(256, 256, 1, in_size // 8, **kwargs),
-            MobileNet_ConvDsBlock(256, 512, 2, in_size // 8, **kwargs),
-            MobileNet_ConvDsBlock(512, 512, 1, in_size // 16, **kwargs),
-            MobileNet_ConvDsBlock(512, 512, 1, in_size // 16, **kwargs),
-            MobileNet_ConvDsBlock(512, 512, 1, in_size // 16, **kwargs),
-            MobileNet_ConvDsBlock(512, 512, 1, in_size // 16, **kwargs),
-            MobileNet_ConvDsBlock(512, 512, 1, in_size // 16, **kwargs),
-            MobileNet_ConvDsBlock(512, 1024, 2, in_size // 16, **kwargs),
-            MobileNet_ConvDsBlock(1024, 1024, 1, in_size // 32, **kwargs_real),
+            MobileNet_ConvBlock(in_channels, 32, 2, **kwargs_real),
+            MobileNet_ConvDsBlock(32, 64, 1, **kwargs),
+            MobileNet_ConvDsBlock(64, 128, 2, **kwargs),
+            MobileNet_ConvDsBlock(128, 128, 1, **kwargs),
+            MobileNet_ConvDsBlock(128, 256, 2, **kwargs),
+            MobileNet_ConvDsBlock(256, 256, 1, **kwargs),
+            MobileNet_ConvDsBlock(256, 512, 2, **kwargs),
+            MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
+            MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
+            MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
+            MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
+            MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
+            MobileNet_ConvDsBlock(512, 1024, 2, **kwargs),
+            MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs_real),
             AdaptiveAvgPool2d(1),
         )
         self.fc = Linear(1024, num_classes)
