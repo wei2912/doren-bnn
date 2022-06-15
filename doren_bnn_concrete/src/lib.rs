@@ -1,6 +1,6 @@
-use once_cell::sync::Lazy;
-
+use anyhow::Result;
 use concrete::{LWESecretKey, LWEBSK, LWEKSK};
+use once_cell::sync::Lazy;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -27,7 +27,7 @@ fn make_error<E: Display + Sized>(e: E) -> PyErr {
 #[pyfunction]
 #[pyo3(name = "preload_keys")]
 fn preload_keys_py() -> PyResult<()> {
-    println!("{:?}", SK.lock().map_err(make_error)?);
+    let _sk = SK.lock().map_err(make_error)?;
     Ok(())
 }
 
@@ -59,7 +59,7 @@ fn toynet_py(state_dict_py: &PyDict, input: Vec<f64>) -> PyResult<Vec<f64>> {
                 vec[0]
             })
         })
-        .collect::<Result<Vec<f64>, _>>()
+        .collect::<Result<Vec<f64>>>()
         .map_err(make_error)?;
     Ok(output)
 }

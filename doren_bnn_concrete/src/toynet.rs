@@ -1,6 +1,5 @@
+use anyhow::Result;
 use concrete::*;
-
-use std::error::Error;
 
 use crate::linear;
 
@@ -13,8 +12,9 @@ pub fn toynet(
     _bsk: &LWEBSK,
     state_dict: &ToyNetStateDict,
     input: &VectorLWE,
-) -> Result<Vec<VectorLWE>, Box<dyn Error>> {
+) -> Result<Vec<VectorLWE>> {
     let fc_weight = &state_dict.fc_weight;
     let output = linear(input, fc_weight)?;
+    println!("{:?}", output[0].encoders[0]);
     Ok(output)
 }

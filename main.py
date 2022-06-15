@@ -1,4 +1,4 @@
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader, RandomSampler, Subset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, Resize, CenterCrop, Normalize, ToTensor
@@ -13,6 +13,8 @@ import torch
 import argparse
 from pathlib import Path
 import time
+
+from doren_bnn_concrete import preload_keys
 
 # from doren_bnn.mobilenet import MobileNet, NetType
 from doren_bnn.mobilenet import NetType
@@ -58,7 +60,7 @@ def main(**kwargs):
         [
             Resize(256),
             # CenterCrop(224),
-            CenterCrop(8),
+            CenterCrop(64),
             ToTensor(),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
@@ -73,23 +75,23 @@ def main(**kwargs):
     train_loader = DataLoader(
         train_set, sampler=RandomSampler(train_set, num_samples=2500), **loader_params
     )
-    val_loader = DataLoader(
-        val_set, sampler=RandomSampler(val_set, num_samples=500), **loader_params
-    )
+    val_loader = DataLoader(Subset(val_set, range(500)), **loader_params)
+    test_loader = DataLoader(Subset(val_set, range(2)), **loader_params)
 
     nettype = NetType(kwargs["nettype"])
     num_epochs = kwargs["num_epochs"]
 
-    print(nettype)
+    print(nettype)  # FIXME
+
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # model = MobileNet(3, num_classes=10, nettype=nettype).cuda()
-    model = ToyNet(num_classes=10).cuda()
-    criterion = nn.CrossEntropyLoss().cuda()
+    model = ToyNet(num_classes=10).to(device)
+    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=5e-6)
     scheduler = CosineAnnealingWarmRestarts(optimizer, 30)
 
-    # summary(model, input_size=(batch_size, 3, 224, 224))
-    summary(model, input_size=(batch_size, 3, 8, 8))
+    summary(model, input_size=(batch_size, 3, 64, 64))
 
     if not kwargs["resume"]:
         last_epoch = -1
@@ -98,8 +100,8 @@ def main(**kwargs):
         last_epoch = cp["epoch"]
 
     for epoch in trange(last_epoch + 1, num_epochs):
-        train(train_loader, writer, model, criterion, optimizer, epoch)
-        val_loss = validate(val_loader, writer, model, criterion, epoch)
+        train(train_loader, writer, device, model, criterion, optimizer, epoch)
+        val_loss = validate(val_loader, writer, device, model, criterion, epoch)
 
         writer.add_scalar("Train/lr", scheduler.get_last_lr()[0], epoch)
         writer.flush()
@@ -107,9 +109,13 @@ def main(**kwargs):
 
         save_checkpoint(cp_path, model, optimizer, scheduler, val_loss, epoch)
 
+    # Test FHE version of model
+
+    preload_keys()
     model_fhe = ToyNet_FHE(num_classes=10)
     cp = load_checkpoint(cp_path, model_fhe, optimizer, scheduler)
-    test_fhe(val_loader, writer, model_fhe)
+    test(test_loader, writer, device, model)
+    test_fhe(test_loader, writer, model_fhe)
 
 
 def save_checkpoint(path, model, optimizer, scheduler, val_loss: float, epoch: int):
@@ -136,19 +142,19 @@ def load_checkpoint(path, model, optimizer, scheduler):
 def train(
     train_loader: DataLoader,
     writer: SummaryWriter,
+    device,
     model,
     criterion,
     optimizer,
     epoch: int,
 ):
     model.train()
-
     start = time.monotonic()
 
     losses = []
     for (input, target) in train_loader:
-        output = model(input.cuda())
-        loss = criterion(output, target.cuda())
+        output = model(input.to(device))
+        loss = criterion(output, target.to(device))
 
         losses.append(loss.item())
 
@@ -166,23 +172,24 @@ def train(
 
 
 def validate(
-    val_loader: DataLoader, writer: SummaryWriter, model, criterion, epoch: int
+    val_loader: DataLoader, writer: SummaryWriter, device, model, criterion, epoch: int
 ):
     model.eval()
+    start = time.monotonic()
 
     losses = []
     outputs = []
     targets = []
     for (input, target) in val_loader:
-        output = model(input.cuda())
-        loss = criterion(output, target.cuda())
+        output = model(input.to(device))
+        loss = criterion(output, target.to(device))
 
         losses.append(loss.item())
         outputs.extend(output.squeeze().tolist())
         targets.extend(target.tolist())
 
-        print(output)
-        break
+    end = time.monotonic()
+    writer.add_scalar("Val/time", end - start, epoch)
 
     loss_mean = sum(losses) / len(losses)
     writer.add_scalar("Val/loss", loss_mean, epoch)
@@ -201,8 +208,33 @@ def validate(
     return loss_mean
 
 
+def test(test_loader: DataLoader, writer: SummaryWriter, device, model):
+    model.eval()
+    start = time.monotonic()
+
+    outputs = []
+    targets = []
+    for (input, target) in test_loader:
+        output = model(input.to(device))
+        outputs.extend(output.squeeze().tolist())
+        targets.extend(target.tolist())
+        print(output[:10])
+
+    end = time.monotonic()
+    writer.add_scalar("Test/time", end - start, -1)
+
+    writer.add_scalar(
+        "Test/top-1", top_k_accuracy_score(targets, outputs, k=1, labels=range(10)), -1
+    )
+    writer.add_scalar(
+        "Test/top-5", top_k_accuracy_score(targets, outputs, k=5, labels=range(10)), -1
+    )
+    writer.flush()
+
+
 def test_fhe(test_loader: DataLoader, writer: SummaryWriter, model):
     model.eval()
+    start = time.monotonic()
 
     outputs = []
     targets = []
@@ -210,15 +242,20 @@ def test_fhe(test_loader: DataLoader, writer: SummaryWriter, model):
         output = model(input)
         outputs.extend(output.squeeze().tolist())
         targets.extend(target.tolist())
+        print(output[:10])
 
-        print(output)
-        break
+    end = time.monotonic()
+    writer.add_scalar("Test-FHE/time", end - start, -1)
 
     writer.add_scalar(
-        "Test/top-1", top_k_accuracy_score(targets, outputs, k=1, labels=range(10)), -1
+        "Test-FHE/top-1",
+        top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),
+        -1,
     )
     writer.add_scalar(
-        "Test/top-5", top_k_accuracy_score(targets, outputs, k=5, labels=range(10)), -1
+        "Test-FHE/top-5",
+        top_k_accuracy_score(targets, outputs, k=5, labels=range(10)),
+        -1,
     )
     writer.flush()
 

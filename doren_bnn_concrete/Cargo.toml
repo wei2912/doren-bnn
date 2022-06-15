@@ -8,6 +8,8 @@ name = "doren_bnn_concrete"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+anyhow = "^1.0.56"
 concrete = "=0.1.11"
 once_cell = "^1.12.0"
 pyo3 = { version = "^0.16.5", features = ["extension-module"] }
+rayon = "^1.5.3"
