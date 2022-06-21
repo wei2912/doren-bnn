@@ -10,6 +10,7 @@ const BSK_BASE_LOG: usize = 7;
 const BSK_LEVEL: usize = 3;
 const KSK_BASE_LOG: usize = 2;
 const KSK_LEVEL: usize = 7;
+const NUM_BITS: usize = 10;
 
 const SK_LWE_FILENAME: &str = "sk_lwe.json";
 const KSK_FILENAME: &str = "ksk.json";
@@ -59,39 +60,37 @@ pub fn load_keys(sk_path_str: &str) -> Result<(LWESecretKey, LWEKSK, LWEBSK)> {
     }
 }
 
-pub fn convert_bin_to_pm1(input: &Vec<bool>) -> Vec<f64> {
-    input
-        .into_iter()
-        .map(|b| if *b { 1.0 } else { -1.0 })
-        .collect()
+pub fn convert_bin_to_pm1(input: &[bool]) -> Vec<f64> {
+    input.iter().map(|b| if *b { 1.0 } else { -1.0 }).collect()
 }
 
-pub fn convert_f64_to_bin(input: &Vec<f64>) -> Vec<bool> {
-    input.into_iter().map(|x| *x > 0.0).collect()
+pub fn convert_f64_to_bin(input: &[f64]) -> Vec<bool> {
+    input.iter().map(|x| *x > 0.0).collect()
 }
 
 pub fn new_encoder(nb_bit_precision: usize) -> Result<Encoder> {
+    assert!(nb_bit_precision < NUM_BITS); // should have at least one bit of padding
     Ok(Encoder::new(
         -1.0,
         1.0,
         nb_bit_precision,
-        16 - nb_bit_precision,
+        NUM_BITS - nb_bit_precision,
     )?)
 }
 
 pub fn new_encoder_bin() -> Result<Encoder> {
-    Ok(new_encoder(1)?)
+    new_encoder(1)
 }
 
-pub fn encrypt(sk_lwe: &LWESecretKey, input: &Vec<f64>, encoder: &Encoder) -> Result<VectorLWE> {
-    let output = VectorLWE::encode_encrypt(sk_lwe, &input, &encoder)?;
+pub fn encrypt(sk_lwe: &LWESecretKey, input: &[f64], encoder: &Encoder) -> Result<VectorLWE> {
+    let output = VectorLWE::encode_encrypt(sk_lwe, input, encoder)?;
     Ok(output)
 }
 
-pub fn encrypt_bin(sk_lwe: &LWESecretKey, input: &Vec<bool>) -> Result<VectorLWE> {
+pub fn encrypt_bin(sk_lwe: &LWESecretKey, input: &[bool]) -> Result<VectorLWE> {
     let encoder = new_encoder_bin()?;
     let input_pm1 = convert_bin_to_pm1(input);
-    Ok(encrypt(sk_lwe, &input_pm1, &encoder)?)
+    encrypt(sk_lwe, &input_pm1, &encoder)
 }
 
 pub fn decrypt(sk_lwe: &LWESecretKey, input: &VectorLWE) -> Result<Vec<f64>> {

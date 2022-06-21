@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     println!("Before encryption: {:?}", messages);
 
     fs::create_dir_all("sk/")?;
-    let (sk_lwe, _, _) = load_keys("sk/")?;
+    let (sk_lwe, ksk, bsk) = load_keys("sk/")?;
     println!();
 
     let c1 = encrypt_bin(&sk_lwe, &convert_f64_to_bin(&messages))?;
@@ -45,10 +45,17 @@ fn main() -> Result<()> {
     print_encoder(&c3.encoders[0]);
     println!();
 
-    let c4 = linear(&c1, &vec![convert_f64_to_bin(&weights)])?;
+    let c4 = linear(&c1, &[convert_f64_to_bin(&weights)])?;
     let o4 = decrypt(&sk_lwe, &c4[0])?;
     println!("Linear layer with same weights: {:?}", o4);
     print_encoder(&c4[0].encoders[0]);
+    println!();
+
+    const THRESHOLD: f64 = -2.0;
+    let c5 = rsign(&ksk, &bsk, &c4[0], THRESHOLD)?;
+    let o5 = decrypt(&sk_lwe, &c5)?;
+    println!("RSign with threshold {:?}: {:?}", THRESHOLD, o5);
+    print_encoder(&c5.encoders[0]);
     println!();
 
     Ok(())

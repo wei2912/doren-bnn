@@ -60,7 +60,7 @@ def main(**kwargs):
         [
             Resize(256),
             # CenterCrop(224),
-            CenterCrop(64),
+            CenterCrop(32),
             ToTensor(),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
@@ -86,12 +86,13 @@ def main(**kwargs):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # model = MobileNet(3, num_classes=10, nettype=nettype).cuda()
-    model = ToyNet(num_classes=10).to(device)
+    NUM_INPUT = 256
+    model = ToyNet(num_input=NUM_INPUT, num_classes=10).to(device)
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=5e-6)
     scheduler = CosineAnnealingWarmRestarts(optimizer, 30)
 
-    summary(model, input_size=(batch_size, 3, 64, 64))
+    summary(model, input_size=(batch_size, 3, 32, 32))
 
     if not kwargs["resume"]:
         last_epoch = -1
@@ -112,7 +113,7 @@ def main(**kwargs):
     # Test FHE version of model
 
     preload_keys()
-    model_fhe = ToyNet_FHE(num_classes=10)
+    model_fhe = ToyNet_FHE(num_input=NUM_INPUT, num_classes=10)
     cp = load_checkpoint(cp_path, model_fhe, optimizer, scheduler)
     test(test_loader, writer, device, model)
     test_fhe(test_loader, writer, model_fhe)

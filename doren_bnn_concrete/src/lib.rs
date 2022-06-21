@@ -43,18 +43,18 @@ fn toynet_py(state_dict_py: &PyDict, input: Vec<f64>) -> PyResult<Vec<f64>> {
     }?;
 
     let input_enc = encrypt_bin(
-        &sk_lwe,
+        sk_lwe,
         &input.into_iter().map(|x| x > 0.0).collect::<Vec<bool>>(),
     )
     .map_err(make_error)?;
 
     let state_dict = ToyNetStateDict { fc_weight };
-    let output_enc = toynet(&ksk, &bsk, &state_dict, &input_enc).map_err(make_error)?;
+    let output_enc = toynet(ksk, bsk, &state_dict, &input_enc).map_err(make_error)?;
 
     let output = output_enc
         .into_iter()
         .map(|ct| {
-            decrypt(&sk_lwe, &ct).map(|vec| {
+            decrypt(sk_lwe, &ct).map(|vec| {
                 assert!(vec.len() == 1);
                 vec[0]
             })
