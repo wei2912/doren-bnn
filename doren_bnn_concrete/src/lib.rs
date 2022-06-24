@@ -12,6 +12,8 @@ mod base;
 pub use crate::base::*;
 mod nn;
 pub use crate::nn::*;
+mod npe;
+pub use crate::npe::*;
 mod toynet;
 pub use crate::toynet::*;
 

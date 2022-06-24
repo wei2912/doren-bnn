@@ -18,6 +18,40 @@ fn print_encoder(encoder: &Encoder) {
 }
 
 fn main() -> Result<()> {
+    for lwe_params in [
+        LWE128_512,
+        LWE128_630,
+        LWE128_650,
+        LWE128_688,
+        LWE128_710,
+        LWE128_750,
+        LWE128_800,
+        LWE128_830,
+        LWE128_1024,
+        LWE128_2048,
+    ] {
+        for rlwe_params in [RLWE128_512_2, RLWE128_1024_1, RLWE128_2048_1] {
+            for bsk_base_log in 2..12 {
+                for bsk_level in 2..12 {
+                    println!(
+                        "{:?}",
+                        (
+                            lwe_params.dimension,
+                            rlwe_params.polynomial_size,
+                            bsk_base_log,
+                            bsk_level
+                        )
+                    );
+                    println!(
+                        "Estimated summation width: {:?}",
+                        calc_bin_sum_width(&lwe_params, &rlwe_params, bsk_base_log, bsk_level)
+                    );
+                    println!();
+                }
+            }
+        }
+    }
+
     let messages = vec![-1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0];
 
     println!("Before encryption: {:?}", messages);

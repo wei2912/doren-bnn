@@ -10,6 +10,7 @@ const BSK_BASE_LOG: usize = 7;
 const BSK_LEVEL: usize = 3;
 const KSK_BASE_LOG: usize = 2;
 const KSK_LEVEL: usize = 7;
+
 const NUM_BITS: usize = 10;
 
 const SK_LWE_FILENAME: &str = "sk_lwe.json";
