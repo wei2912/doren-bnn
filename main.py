@@ -14,11 +14,12 @@ import argparse
 from pathlib import Path
 import time
 
-from doren_bnn_concrete import preload_keys
+# from doren_bnn_concrete import preload_keys
 
-# from doren_bnn.mobilenet import MobileNet, NetType
-from doren_bnn.mobilenet import NetType
-from doren_bnn.toynet import ToyNet, ToyNet_FHE
+from doren_bnn.mobilenet import MobileNet, NetType
+
+# from doren_bnn.mobilenet import NetType
+# from doren_bnn.toynet import ToyNet, ToyNet_FHE
 
 parser = argparse.ArgumentParser(description="doren_bnn experiments")
 parser.add_argument(
@@ -59,8 +60,8 @@ def main(**kwargs):
     transform = Compose(
         [
             Resize(256),
-            # CenterCrop(224),
-            CenterCrop(32),
+            CenterCrop(224),
+            # CenterCrop(32),
             ToTensor(),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
@@ -76,7 +77,7 @@ def main(**kwargs):
         train_set, sampler=RandomSampler(train_set, num_samples=2500), **loader_params
     )
     val_loader = DataLoader(Subset(val_set, range(500)), **loader_params)
-    test_loader = DataLoader(Subset(val_set, range(2)), **loader_params)
+    # test_loader = DataLoader(Subset(val_set, range(2)), **loader_params)
 
     nettype = NetType(kwargs["nettype"])
     num_epochs = kwargs["num_epochs"]
@@ -85,14 +86,15 @@ def main(**kwargs):
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    # model = MobileNet(3, num_classes=10, nettype=nettype).cuda()
-    NUM_INPUT = 256
-    model = ToyNet(num_input=NUM_INPUT, num_classes=10).to(device)
+    model = MobileNet(3, num_classes=10, nettype=nettype).cuda()
+    # NUM_INPUT = 256
+    # model = ToyNet(num_input=NUM_INPUT, num_classes=10).to(device)
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=5e-6)
+    optimizer = AdamW(model.parameters(), lr=1e-2, weight_decay=5e-6)
     scheduler = CosineAnnealingWarmRestarts(optimizer, 30)
 
-    summary(model, input_size=(batch_size, 3, 32, 32))
+    summary(model, input_size=(batch_size, 3, 224, 224))
+    # summary(model, input_size=(batch_size, 3, 32, 32))
 
     if not kwargs["resume"]:
         last_epoch = -1
@@ -112,11 +114,13 @@ def main(**kwargs):
 
     # Test FHE version of model
 
+    """
     preload_keys()
     model_fhe = ToyNet_FHE(num_input=NUM_INPUT, num_classes=10)
     cp = load_checkpoint(cp_path, model_fhe, optimizer, scheduler)
     test(test_loader, writer, device, model)
     test_fhe(test_loader, writer, model_fhe)
+    """
 
 
 def save_checkpoint(path, model, optimizer, scheduler, val_loss: float, epoch: int):
@@ -155,10 +159,9 @@ def train(
     losses = []
     for (input, target) in train_loader:
         output = model(input.to(device))
-        loss = criterion(output, target.to(device))
+        loss = criterion(output, target.to(device)) + model.wdr()
 
         losses.append(loss.item())
-
         optimizer.zero_grad()
         loss.backward()
 
@@ -183,7 +186,7 @@ def validate(
     targets = []
     for (input, target) in val_loader:
         output = model(input.to(device))
-        loss = criterion(output, target.to(device))
+        loss = criterion(output, target.to(device)) + model.wdr()
 
         losses.append(loss.item())
         outputs.extend(output.squeeze().tolist())

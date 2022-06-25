@@ -13,15 +13,22 @@ from enum import Enum
 
 from .xnorpp import Conv2d_XnorPP
 from .xnor_react import Conv2d_Xnor_ReAct, RPReLU
+from .xnorpp_sca import Conv2d_XnorPP_SCA
 
 
 class NetType(Enum):
     REAL = "Real"
     XNORPP = "XnorPP"
     XNOR_REACT = "Xnor-ReAct"
+    XNORPP_SCA = "XnorPP-SCA"
 
 
-class MobileNet_ConvBlock(Module):
+class MobileNet_Block(Module):
+    def __init__(self):
+        super(MobileNet_Block, self).__init__()
+
+
+class MobileNet_ConvBlock(MobileNet_Block):
     def __init__(
         self,
         in_channels: int,
@@ -30,6 +37,7 @@ class MobileNet_ConvBlock(Module):
         nettype: NetType,
     ):
         super(MobileNet_ConvBlock, self).__init__()
+        self.nettype = nettype
 
         block_params = {"stride": stride, "padding": 1, "bias": False}
 
@@ -49,13 +57,24 @@ class MobileNet_ConvBlock(Module):
                 Conv2d_Xnor_ReAct(in_channels, out_channels, 3, **block_params),
                 RPReLU(),
             ),
+            NetType.XNORPP_SCA: Sequential(
+                BatchNorm2d(in_channels),
+                Conv2d_XnorPP_SCA(in_channels, out_channels, 3, **block_params),
+                ReLU(inplace=True),
+            ),
         }[nettype]
 
     def forward(self, input: Tensor) -> Tensor:
         return self.block(input)
 
+    def wdr(self) -> Tensor:
+        if not self.nettype == NetType.XNORPP_SCA:
+            return 0
 
-class MobileNet_ConvDsBlock(Module):
+        return self.block[1].wdr()
+
+
+class MobileNet_ConvDsBlock(MobileNet_Block):
     def __init__(
         self,
         in_channels: int,
@@ -64,6 +83,7 @@ class MobileNet_ConvDsBlock(Module):
         nettype: NetType,
     ):
         super(MobileNet_ConvDsBlock, self).__init__()
+        self.nettype = nettype
 
         block_dw_params = {
             "stride": stride,
@@ -87,6 +107,11 @@ class MobileNet_ConvDsBlock(Module):
                 Conv2d_Xnor_ReAct(in_channels, in_channels, 3, **block_dw_params),
                 RPReLU(),
             ),
+            NetType.XNORPP_SCA: Sequential(
+                BatchNorm2d(in_channels),
+                Conv2d_XnorPP_SCA(in_channels, in_channels, 3, **block_dw_params),
+                ReLU(inplace=True),
+            ),
         }[nettype]
 
         block_pw_params = {"stride": 1, "padding": 0, "bias": False}
@@ -106,12 +131,23 @@ class MobileNet_ConvDsBlock(Module):
                 Conv2d_Xnor_ReAct(in_channels, out_channels, 1, **block_dw_params),
                 RPReLU(),
             ),
+            NetType.XNORPP_SCA: Sequential(
+                BatchNorm2d(in_channels),
+                Conv2d_XnorPP_SCA(in_channels, out_channels, 1, **block_pw_params),
+                ReLU(inplace=True),
+            ),
         }[nettype]
 
         self.block = Sequential(self.block_dw, self.block_pw)
 
     def forward(self, input: Tensor) -> Tensor:
         return self.block(input)
+
+    def wdr(self) -> Tensor:
+        if not self.nettype == NetType.XNORPP_SCA:
+            return 0
+
+        return self.block_dw[1].wdr() + self.block_pw[1].wdr()
 
 
 class MobileNet(Module):
@@ -143,3 +179,11 @@ class MobileNet(Module):
     def forward(self, input: Tensor) -> Tensor:
         input = self.model(input).view(-1, 1024)
         return self.fc(input)
+
+    def wdr(self) -> Tensor:
+        wdrs = [
+            layer.wdr() if isinstance(layer, MobileNet_Block) else 0.0
+            for layer in self.model
+        ]
+        # print(["{:.3f}".format(float(wdr)) for wdr in wdrs])
+        return sum(wdrs)
