@@ -18,19 +18,22 @@ fn print_encoder(encoder: &Encoder) {
 }
 
 fn main() -> Result<()> {
+    let mut rlwe_4096 = RLWE128_4096_1.clone();
+    rlwe_4096.log2_std_dev = -62; // set to bigger value that can be represented with 64 bits
+
     for lwe_params in [
-        LWE128_512,
-        LWE128_630,
-        LWE128_650,
-        LWE128_688,
-        LWE128_710,
-        LWE128_750,
-        LWE128_800,
-        LWE128_830,
-        LWE128_1024,
-        LWE128_2048,
+        &LWE128_512,
+        &LWE128_630,
+        &LWE128_650,
+        &LWE128_688,
+        &LWE128_710,
+        &LWE128_750,
+        &LWE128_800,
+        &LWE128_830,
+        &LWE128_1024,
+        &LWE128_2048,
     ] {
-        for rlwe_params in [RLWE128_512_2, RLWE128_1024_1, RLWE128_2048_1] {
+        for rlwe_params in [&RLWE128_512_2, &RLWE128_1024_1, &RLWE128_2048_1, &rlwe_4096] {
             for bsk_base_log in 2..12 {
                 for bsk_level in 2..12 {
                     println!(
@@ -44,7 +47,7 @@ fn main() -> Result<()> {
                     );
                     println!(
                         "Estimated summation width: {:?}",
-                        calc_bin_sum_width(&lwe_params, &rlwe_params, bsk_base_log, bsk_level)
+                        calc_bin_sum_width(lwe_params, rlwe_params, bsk_base_log, bsk_level)
                     );
                     println!();
                 }
