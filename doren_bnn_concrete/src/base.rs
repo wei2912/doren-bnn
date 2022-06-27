@@ -5,8 +5,13 @@ use std::fs;
 use std::path::Path;
 
 const LWE_PARAMS: LWEParams = LWE128_750;
-const RLWE_PARAMS: RLWEParams = RLWE128_2048_1;
-const BSK_BASE_LOG: usize = 7;
+// const RLWE_PARAMS: RLWEParams = RLWE128_2048_1;
+const RLWE_PARAMS: RLWEParams = RLWEParams {
+    polynomial_size: RLWE128_4096_1.polynomial_size,
+    dimension: RLWE128_4096_1.dimension,
+    log2_std_dev: -62,
+};
+const BSK_BASE_LOG: usize = 10;
 const BSK_LEVEL: usize = 3;
 const KSK_BASE_LOG: usize = 2;
 const KSK_LEVEL: usize = 7;
