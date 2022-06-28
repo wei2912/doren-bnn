@@ -51,7 +51,7 @@ fn toynet_py(state_dict_py: &PyDict, input: Vec<f64>) -> PyResult<Vec<f64>> {
     .map_err(make_error)?;
 
     let state_dict = ToyNetStateDict { fc_weight };
-    let output_enc = toynet(ksk, bsk, &state_dict, &input_enc).map_err(make_error)?;
+    let output_enc = toynet(sk_lwe, ksk, bsk, &state_dict, &input_enc).map_err(make_error)?;
 
     let output = output_enc
         .into_iter()

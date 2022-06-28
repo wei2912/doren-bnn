@@ -19,6 +19,12 @@ class ToyNet(Module):
 
     def forward(self, input: Tensor) -> Tensor:
         input = input.view(-1, 3 * 32 * 32)
+
+        output_lin = F.linear(
+            Sign.apply(input[:, : self.num_input]), Sign.apply(self.fc.weight)
+        )
+        print(output_lin)
+
         return Sign.apply(
             F.linear(Sign.apply(input[:, : self.num_input]), Sign.apply(self.fc.weight))
             - 2.0  # TODO - parameterise threshold
