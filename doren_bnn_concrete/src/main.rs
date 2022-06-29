@@ -21,6 +21,7 @@ fn main() -> Result<()> {
     let mut rlwe_4096 = RLWE128_4096_1.clone();
     rlwe_4096.log2_std_dev = -62; // set to bigger value that can be represented with 64 bits
 
+    // TODO: try precision 2?
     for lwe_params in [
         &LWE128_512,
         &LWE128_630,

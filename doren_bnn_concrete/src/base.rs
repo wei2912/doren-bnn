@@ -11,6 +11,8 @@ const RLWE_PARAMS: RLWEParams = RLWE128_2048_1;
     dimension: RLWE128_4096_1.dimension,
     log2_std_dev: -62,
 }; */
+
+// TODO: try increasing base_log * level for both BSK and KSK
 const BSK_BASE_LOG: usize = 8;
 const BSK_LEVEL: usize = 3;
 const KSK_BASE_LOG: usize = 2;
@@ -81,7 +83,7 @@ pub fn new_encoder(nb_bit_precision: usize) -> Result<Encoder> {
         1.0,
         nb_bit_precision,
         NUM_BITS - nb_bit_precision,
-    )?)
+    )?) // TODO: try exact encoder
 }
 
 pub fn new_encoder_bin() -> Result<Encoder> {

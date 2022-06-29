@@ -16,7 +16,7 @@ pub fn apply_weights(input: &mut VectorLWE, weight: &[bool]) -> Result<()> {
 }
 
 pub fn accumulate(input: &VectorLWE) -> Result<VectorLWE> {
-    Ok(input.sum_with_padding()?)
+    Ok(input.sum_with_padding()?) // TODO: try adding manually
 }
 
 pub fn linear(input: &VectorLWE, weight: &[Vec<bool>]) -> Result<Vec<VectorLWE>> {
