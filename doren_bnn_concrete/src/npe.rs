@@ -43,7 +43,7 @@ pub fn calc_bin_sum_width(
     bsk_level: usize,
 ) -> Result<usize> {
     let start_pow2 = 32_usize;
-    let max_pow2 = (2 as usize).pow(16);
+    let max_pow2 = 2_usize.pow(16);
 
     let pow2s = iter::successors(Some(start_pow2), |n| {
         if n * 2 <= max_pow2 {

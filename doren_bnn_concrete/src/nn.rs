@@ -32,10 +32,10 @@ pub fn linear(input: &VectorLWE, weight: &[Vec<bool>]) -> Result<Vec<VectorLWE>>
         .collect::<Result<Vec<VectorLWE>>>()
 }
 
-pub fn rsign(ksk: &LWEKSK, bsk: &LWEBSK, input: &VectorLWE, threshold: f64) -> Result<VectorLWE> {
+pub fn sign(ksk: &LWEKSK, bsk: &LWEBSK, input: &VectorLWE) -> Result<VectorLWE> {
     Ok(input.keyswitch(ksk)?.bootstrap_nth_with_function(
         bsk,
-        |x| if x > threshold { 1.0 } else { -1.0 },
+        |x| if x > 0.0 { 1.0 } else { -1.0 },
         &new_encoder_bin()?,
         0,
     )?)

@@ -7,11 +7,20 @@ DOReN-inspired Binary Neural Network architecture.
 ### Package Building
 
 First [install Poetry](https://python-poetry.org/docs/#installation). Dependencies for
-the `doren-bnn` package can now be installed in a virtual environment with the following
-commands:
+the `doren_bnn` package can now be installed in a virtual environment with the following
+command:
 
 ```bash
 poetry install
+```
+
+### `nbdime` Setup
+
+To view Jupyter notebooks with [`nbdime`](https://github.com/jupyter/nbdime), configure
+the diff/merge drivers for this repository with the following command:
+
+```bash
+nbdime config-git --enable
 ```
 
 ### `pre-commit` Setup

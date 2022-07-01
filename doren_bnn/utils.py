@@ -4,7 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, Resize, CenterCrop, Normalize, ToTensor
 from sklearn.metrics import top_k_accuracy_score
-from tqdm import trange
+from tqdm.auto import trange
 
 from enum import Enum
 from pathlib import Path

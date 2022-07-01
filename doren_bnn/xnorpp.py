@@ -25,8 +25,7 @@ class Sign(Function):
     @staticmethod
     def backward(ctx, grad_output: Tensor) -> Tensor:
         (input,) = ctx.saved_tensors
-        return grad_output.clone()  # disable zeroing of large gradients
-        # return grad_output.clone() * input.le(1) * input.ge(-1)
+        return grad_output.clone() * input.le(1) * input.ge(-1)
 
 
 class Conv2d_XnorPP(Module):

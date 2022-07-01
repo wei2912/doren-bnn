@@ -89,10 +89,9 @@ fn main() -> Result<()> {
     print_encoder(&c4[0].encoders[0]);
     println!();
 
-    const THRESHOLD: f64 = -2.0;
-    let c5 = rsign(&ksk, &bsk, &c4[0], THRESHOLD)?;
+    let c5 = sign(&ksk, &bsk, &c4[0])?;
     let o5 = decrypt(&sk_lwe, &c5)?;
-    println!("RSign with threshold {:?}: {:?}", THRESHOLD, o5);
+    println!("Sign: {:?}", o5);
     print_encoder(&c5.encoders[0]);
     println!();
 

@@ -11,7 +11,7 @@ import argparse
 from doren_bnn_concrete import preload_keys
 from doren_bnn.mobilenet import NetType
 from doren_bnn.toynet import ToyNet, ToyNet_FHE
-from utils import Dataset, Experiment
+from doren_bnn.utils import Dataset, Experiment
 
 parser = argparse.ArgumentParser(description="doren_bnn experiments")
 parser.add_argument(

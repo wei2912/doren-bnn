@@ -1,7 +1,7 @@
 use anyhow::Result;
 use concrete::*;
 
-use crate::{decrypt, linear, rsign};
+use crate::{decrypt, linear, sign};
 
 pub struct ToyNetStateDict {
     pub fc_weight: Vec<Vec<bool>>,
@@ -20,7 +20,7 @@ pub fn toynet(
     let output_dec = output
         .iter()
         .map(|ct| {
-            decrypt(sk_lwe, &ct).map(|vec| {
+            decrypt(sk_lwe, ct).map(|vec| {
                 assert!(vec.len() == 1);
                 vec[0]
             })
@@ -31,9 +31,7 @@ pub fn toynet(
 
     let output2 = output
         .iter()
-        .map(
-            |x| rsign(ksk, bsk, &x, 2.0), // TODO - parameterise threshold
-        )
+        .map(|x| sign(ksk, bsk, x))
         .collect::<Result<Vec<VectorLWE>, _>>()?;
     println!("{:?}", output2[0].encoders[0]);
     Ok(output2)
