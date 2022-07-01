@@ -6,14 +6,15 @@ authors = ["Ng Wei En <weien1292@gmail.com>"]
 license = "MIT License"
 
 [tool.poetry.dependencies]
-python = "~3.9"
-torch = "1.11.0"
-torchvision = "0.12.0"
+python = "~3.10"
+torch = "1.12.0"
+torchvision = "0.13.0"
 torchinfo = "^1.6.5"
 tensorboard = "^2.9.0"
 torch-tb-profiler = "^0.4.0"
 tqdm = "^4.64.0"
 scikit-learn = "1.0.2"
+scipy = "^1.8.1"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"

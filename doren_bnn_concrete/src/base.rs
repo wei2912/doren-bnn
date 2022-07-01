@@ -4,7 +4,7 @@ use concrete::*;
 use std::fs;
 use std::path::Path;
 
-const LWE_PARAMS: LWEParams = LWE128_750;
+const LWE_PARAMS: LWEParams = LWE128_688;
 const RLWE_PARAMS: RLWEParams = RLWE128_2048_1;
 /* const RLWE_PARAMS: RLWEParams = RLWEParams {
     polynomial_size: RLWE128_4096_1.polynomial_size,
@@ -15,8 +15,8 @@ const RLWE_PARAMS: RLWEParams = RLWE128_2048_1;
 // TODO: try increasing base_log * level for both BSK and KSK
 const BSK_BASE_LOG: usize = 8;
 const BSK_LEVEL: usize = 3;
-const KSK_BASE_LOG: usize = 2;
-const KSK_LEVEL: usize = 7;
+const KSK_BASE_LOG: usize = 8;
+const KSK_LEVEL: usize = 3;
 
 const NUM_BITS: usize = 10;
 
