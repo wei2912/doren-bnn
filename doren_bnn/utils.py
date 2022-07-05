@@ -47,14 +47,18 @@ class Experiment:
 
         loader_params = {"batch_size": batch_size, "pin_memory": True}
         self.train_loader = DataLoader(
-            Subset(self.train_set, torch.randperm(len(self.train_set))[:5000]),
+            # self.train_set,
+            Subset(self.train_set, torch.randperm(len(self.train_set))[:10000]),
             **loader_params
         )
         self.val_loader = DataLoader(
-            Subset(self.val_set, torch.randperm(len(self.val_set))[:1000]),
+            # self.val_set,
+            Subset(self.val_set, torch.randperm(len(self.val_set))[:2000]),
             **loader_params
         )
-        self.test_loader = DataLoader(Subset(self.val_set, range(2)), **loader_params)
+        self.test_loader = DataLoader(
+            Subset(self.val_set, torch.randperm(len(self.val_set))[:2]), **loader_params
+        )
 
     def save_checkpoint(self, model, optimizer, scheduler, val_loss: float, epoch: int):
         torch.save(
@@ -97,10 +101,10 @@ class Experiment:
             last_epoch + 1, num_epochs, initial=last_epoch + 1, total=num_epochs
         ):
             # FIXME: abstract out calculation of lamb into an actual lambda function
-            if epoch < 100:
+            if epoch < 25:
                 kwargs["lamb"] = 0
             else:
-                kwargs["lamb"] = lamb * (10 ** (-(num_epochs - epoch) // 100))
+                kwargs["lamb"] = lamb * (10 ** (-(num_epochs - epoch) // 25))
             self.writer.add_scalar("Train/lamb", kwargs["lamb"], epoch)
 
             self.train_epoch(device, model, criterion, optimizer, epoch, **kwargs)
@@ -127,7 +131,6 @@ class Experiment:
 
             output = model(input)
             # loss = criterion(output, target)
-            # print(model.wdr(alpha))
             loss = criterion(output, target) + lamb * model.wdr(alpha)
 
             losses.append(loss.item())
@@ -146,12 +149,12 @@ class Experiment:
         self.writer.add_scalar("Train/loss", loss_mean, epoch)
         self.writer.add_scalar(
             "Train/top-1",
-            top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),
+            top_k_accuracy_score(targets, outputs, k=1),
             epoch,
         )
         self.writer.add_scalar(
             "Train/top-5",
-            top_k_accuracy_score(targets, outputs, k=5, labels=range(10)),
+            top_k_accuracy_score(targets, outputs, k=5),
             epoch,
         )
         self.writer.flush()
@@ -170,8 +173,8 @@ class Experiment:
             target = target.to(device)
 
             output = model(input)
-            loss = criterion(output, target)
-            # loss = criterion(output, target) + model.wdr()
+            # loss = criterion(output, target)
+            loss = criterion(output, target) + lamb * model.wdr(alpha)
 
             losses.append(loss.item())
             outputs.extend(output.squeeze().tolist())
@@ -184,12 +187,12 @@ class Experiment:
         self.writer.add_scalar("Val/loss", loss_mean, epoch)
         self.writer.add_scalar(
             "Val/top-1",
-            top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),
+            top_k_accuracy_score(targets, outputs, k=1),
             epoch,
         )
         self.writer.add_scalar(
             "Val/top-5",
-            top_k_accuracy_score(targets, outputs, k=5, labels=range(10)),
+            top_k_accuracy_score(targets, outputs, k=5),
             epoch,
         )
         self.writer.flush()
@@ -212,6 +215,7 @@ class Experiment:
         end = time.monotonic()
         self.writer.add_scalar("Test/time", end - start, -1)
 
+        # FIXME: see labels
         self.writer.add_scalar(
             "Test/top-1",
             top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),
@@ -239,6 +243,7 @@ class Experiment:
         end = time.monotonic()
         self.writer.add_scalar("Test-FHE/time", end - start, -1)
 
+        # FIXME: see labels
         self.writer.add_scalar(
             "Test-FHE/top-1",
             top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),

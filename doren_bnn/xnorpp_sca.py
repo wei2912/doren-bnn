@@ -29,10 +29,10 @@ class Conv2d_XnorPP_SCA(Module):
         # uniform distribution of {-1, 0, 1}
         # nn.init.uniform_(self.weight, a=3*math.atanh(-0.5), b=3*math.atanh(0.5))
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
-        torch.nn.init.normal_(self.alpha, mean=1.0, std=1.0)
 
     def forward(self, input: Tensor) -> Tensor:
-        output = F.conv2d(Sign.apply(input), self.weight.tanh(), **self.conv2d_params)
+        weight_tanh = self.weight.tanh()
+        output = F.conv2d(Sign.apply(input), weight_tanh, **self.conv2d_params)
         return output.mul(self.alpha)
 
     def wdr(self, alpha: float) -> Tensor:

@@ -7,6 +7,7 @@ from torch.nn import (
     ReLU,
     AdaptiveAvgPool2d,
     Linear,
+    Upsample,
 )
 
 from enum import Enum
@@ -154,7 +155,12 @@ class MobileNet(Module):
     def __init__(self, in_channels: int, num_classes: int = 1000, **kwargs):
         super(MobileNet, self).__init__()
 
+        kwargs_real = {**kwargs}
+        kwargs_real["nettype"] = NetType.REAL
+
+        self.upsample = Upsample((224, 224))
         self.model = Sequential(
+            # MobileNet_ConvBlock(in_channels, 32, 2, **kwargs_real),
             MobileNet_ConvBlock(in_channels, 32, 2, **kwargs),
             MobileNet_ConvDsBlock(32, 64, 1, **kwargs),
             MobileNet_ConvDsBlock(64, 128, 2, **kwargs),
@@ -168,14 +174,16 @@ class MobileNet(Module):
             MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
             MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
             MobileNet_ConvDsBlock(512, 1024, 2, **kwargs),
+            # MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs_real),
             MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs),
             AdaptiveAvgPool2d(1),
         )
         self.fc = Linear(1024, num_classes)
 
     def forward(self, input: Tensor) -> Tensor:
-        input = self.model(input).view(-1, 1024)
-        return self.fc(input)
+        up_input = self.upsample(input)
+        output = self.model(up_input).view(-1, 1024)
+        return self.fc(output)
 
     def wdr(self, alpha: float) -> Tensor:
         wdrs = [
