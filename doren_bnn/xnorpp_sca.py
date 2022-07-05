@@ -25,28 +25,27 @@ class Conv2d_XnorPP_SCA(Module):
             in_channels, out_channels, kernel_size, bias=False, **self.conv2d_params
         )
 
-        self.weight = Parameter(conv2d.weight.detach())
+        self.weight = Parameter(conv2d.weight.detach().atanh())
         # uniform distribution of {-1, 0, 1}
         # nn.init.uniform_(self.weight, a=3*math.atanh(-0.5), b=3*math.atanh(0.5))
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
+        torch.nn.init.normal_(self.alpha, mean=1.0, std=1.0)
 
     def forward(self, input: Tensor) -> Tensor:
-        tanh_weight = torch.tanh(self.weight)
-        input = F.conv2d(
-            Sign.apply(input),
-            tanh_weight if self.training else torch.round(tanh_weight),
-            **self.conv2d_params
-        )
-        return input.mul(self.alpha)
+        output = F.conv2d(Sign.apply(input), self.weight.tanh(), **self.conv2d_params)
+        return output.mul(self.alpha)
 
-    def wdr(self, alpha: float = 0.1, lamb: float = 1e-7) -> Tensor:
+    def wdr(self, alpha: float) -> Tensor:
         """
         Implement Weight Decay Regulariser (WDR) for SCA.
         """
-        # sparsity = (torch.round(torch.tanh(self.weight)) == 0).sum()
-        tanh_weight_sq = torch.tanh(self.weight).square()
-        # quant_err = (tanh_weight_sq * (1 - tanh_weight_sq)).sum()
-        output = (lamb * (alpha - tanh_weight_sq) * tanh_weight_sq).sum()
-        # print(sparsity / self.weight.numel())
-        # print(sparsity / self.weight.numel(), quant_err, output)
+        tanh_weight_sq = self.weight.tanh().square()
+        output = ((alpha - tanh_weight_sq) * tanh_weight_sq).sum()
+
+        """
+        sparsity = (torch.round(torch.tanh(self.weight)) == 0).sum()
+        quant_err = (tanh_weight_sq * (1 - tanh_weight_sq)).sum()
+        print(sparsity / self.weight.numel(), quant_err, output)
+        """
+
         return output

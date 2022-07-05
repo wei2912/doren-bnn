@@ -67,11 +67,11 @@ class MobileNet_ConvBlock(MobileNet_Block):
     def forward(self, input: Tensor) -> Tensor:
         return self.block(input)
 
-    def wdr(self) -> Tensor:
+    def wdr(self, alpha: float) -> Tensor:
         if not self.nettype == NetType.XNORPP_SCA:
             return 0
 
-        return self.block[1].wdr()
+        return self.block[1].wdr(alpha)
 
 
 class MobileNet_ConvDsBlock(MobileNet_Block):
@@ -99,7 +99,7 @@ class MobileNet_ConvDsBlock(MobileNet_Block):
             ),
             NetType.XNORPP: Sequential(
                 BatchNorm2d(in_channels),
-                Conv2d(in_channels, in_channels, 3, **block_dw_params),
+                Conv2d_XnorPP(in_channels, in_channels, 3, **block_dw_params),
                 ReLU(inplace=True),
             ),
             NetType.XNOR_REACT: Sequential(
@@ -143,22 +143,19 @@ class MobileNet_ConvDsBlock(MobileNet_Block):
     def forward(self, input: Tensor) -> Tensor:
         return self.block(input)
 
-    def wdr(self) -> Tensor:
+    def wdr(self, alpha: float) -> Tensor:
         if not self.nettype == NetType.XNORPP_SCA:
             return 0
 
-        return self.block_dw[1].wdr() + self.block_pw[1].wdr()
+        return self.block_dw[1].wdr(alpha) + self.block_pw[1].wdr(alpha)
 
 
 class MobileNet(Module):
     def __init__(self, in_channels: int, num_classes: int = 1000, **kwargs):
         super(MobileNet, self).__init__()
 
-        kwargs_real = {**kwargs}
-        kwargs_real["nettype"] = NetType.REAL
-
         self.model = Sequential(
-            MobileNet_ConvBlock(in_channels, 32, 2, **kwargs_real),
+            MobileNet_ConvBlock(in_channels, 32, 2, **kwargs),
             MobileNet_ConvDsBlock(32, 64, 1, **kwargs),
             MobileNet_ConvDsBlock(64, 128, 2, **kwargs),
             MobileNet_ConvDsBlock(128, 128, 1, **kwargs),
@@ -171,7 +168,7 @@ class MobileNet(Module):
             MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
             MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
             MobileNet_ConvDsBlock(512, 1024, 2, **kwargs),
-            MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs_real),
+            MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs),
             AdaptiveAvgPool2d(1),
         )
         self.fc = Linear(1024, num_classes)
@@ -180,9 +177,9 @@ class MobileNet(Module):
         input = self.model(input).view(-1, 1024)
         return self.fc(input)
 
-    def wdr(self) -> Tensor:
+    def wdr(self, alpha: float) -> Tensor:
         wdrs = [
-            layer.wdr() if isinstance(layer, MobileNet_Block) else 0.0
+            layer.wdr(alpha) if isinstance(layer, MobileNet_Block) else 0.0
             for layer in self.model
         ]
         # print(["{:.3f}".format(float(wdr)) for wdr in wdrs])

@@ -25,7 +25,8 @@ class Sign(Function):
     @staticmethod
     def backward(ctx, grad_output: Tensor) -> Tensor:
         (input,) = ctx.saved_tensors
-        return grad_output.clone() * input.le(1) * input.ge(-1)
+        return grad_output.clone()  # FIXME
+        # return grad_output.clone() * input.le(1) * input.ge(-1)
 
 
 class Conv2d_XnorPP(Module):
@@ -50,7 +51,7 @@ class Conv2d_XnorPP(Module):
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
 
     def forward(self, input: Tensor) -> Tensor:
-        input = F.conv2d(
+        output = F.conv2d(
             Sign.apply(input), Sign.apply(self.weight), **self.conv2d_params
         )
-        return input.mul(self.alpha)
+        return output.mul(self.alpha)

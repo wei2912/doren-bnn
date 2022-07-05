@@ -1,8 +1,8 @@
 import torch
-from torch.utils.data import DataLoader, RandomSampler, Subset
+from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
-from torchvision.transforms import Compose, Resize, CenterCrop, Normalize, ToTensor
+from torchvision.transforms import Compose, Resize, Normalize, ToTensor
 from sklearn.metrics import top_k_accuracy_score
 from tqdm.auto import trange
 
@@ -34,8 +34,7 @@ class Experiment:
         # normalisation of torchvision's datasets.
         transform = Compose(
             [
-                Resize(256),
-                CenterCrop(224),
+                Resize(32),
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
@@ -48,11 +47,13 @@ class Experiment:
 
         loader_params = {"batch_size": batch_size, "pin_memory": True}
         self.train_loader = DataLoader(
-            self.train_set,
-            sampler=RandomSampler(self.train_set, num_samples=2500),
+            Subset(self.train_set, torch.randperm(len(self.train_set))[:5000]),
             **loader_params
         )
-        self.val_loader = DataLoader(Subset(self.val_set, range(500)), **loader_params)
+        self.val_loader = DataLoader(
+            Subset(self.val_set, torch.randperm(len(self.val_set))[:1000]),
+            **loader_params
+        )
         self.test_loader = DataLoader(Subset(self.val_set, range(2)), **loader_params)
 
     def save_checkpoint(self, model, optimizer, scheduler, val_loss: float, epoch: int):
@@ -83,16 +84,27 @@ class Experiment:
         scheduler,
         num_epochs: int,
         resume: bool = False,
+        **kwargs
     ):
         if not resume:
             last_epoch = -1
         else:
-            cp = self.load_checkpoint()
+            cp = self.load_checkpoint(model, optimizer, scheduler)
             last_epoch = cp["epoch"]
 
-        for epoch in trange(last_epoch + 1, num_epochs):
-            self.train_epoch(device, model, criterion, optimizer, epoch)
-            val_loss = self.validate_epoch(device, model, criterion, epoch)
+        lamb = kwargs["lamb"]
+        for epoch in trange(
+            last_epoch + 1, num_epochs, initial=last_epoch + 1, total=num_epochs
+        ):
+            # FIXME: abstract out calculation of lamb into an actual lambda function
+            if epoch < 100:
+                kwargs["lamb"] = 0
+            else:
+                kwargs["lamb"] = lamb * (10 ** (-(num_epochs - epoch) // 100))
+            self.writer.add_scalar("Train/lamb", kwargs["lamb"], epoch)
+
+            self.train_epoch(device, model, criterion, optimizer, epoch, **kwargs)
+            val_loss = self.validate_epoch(device, model, criterion, epoch, **kwargs)
 
             self.writer.add_scalar("Train/lr", scheduler.get_last_lr()[0], epoch)
             self.writer.flush()
@@ -100,20 +112,28 @@ class Experiment:
 
             self.save_checkpoint(model, optimizer, scheduler, val_loss, epoch)
 
-    def train_epoch(self, device, model, criterion, optimizer, epoch: int):
+    def train_epoch(
+        self, device, model, criterion, optimizer, epoch: int, alpha: float, lamb: float
+    ):
         model.train()
         start = time.monotonic()
 
         losses = []
+        outputs = []
+        targets = []
         for (input, target) in self.train_loader:
             input = input.to(device)
             target = target.to(device)
 
             output = model(input)
-            loss = criterion(output, target)
-            # loss = criterion(output, target) + model.wdr()
+            # loss = criterion(output, target)
+            # print(model.wdr(alpha))
+            loss = criterion(output, target) + lamb * model.wdr(alpha)
 
             losses.append(loss.item())
+            outputs.extend(output.squeeze().tolist())
+            targets.extend(target.tolist())
+
             optimizer.zero_grad()
             loss.backward()
 
@@ -124,9 +144,21 @@ class Experiment:
 
         loss_mean = sum(losses) / len(losses)
         self.writer.add_scalar("Train/loss", loss_mean, epoch)
+        self.writer.add_scalar(
+            "Train/top-1",
+            top_k_accuracy_score(targets, outputs, k=1, labels=range(10)),
+            epoch,
+        )
+        self.writer.add_scalar(
+            "Train/top-5",
+            top_k_accuracy_score(targets, outputs, k=5, labels=range(10)),
+            epoch,
+        )
         self.writer.flush()
 
-    def validate_epoch(self, device, model, criterion, epoch: int):
+    def validate_epoch(
+        self, device, model, criterion, epoch: int, alpha: float, lamb: float
+    ):
         model.eval()
         start = time.monotonic()
 
