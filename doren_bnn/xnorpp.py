@@ -25,13 +25,12 @@ class Sign(Function):
     @staticmethod
     def backward(ctx, grad_output: Tensor) -> Tensor:
         (input,) = ctx.saved_tensors
-        # return grad_output.clone()  # FIXME
         return grad_output.clone() * input.le(1) * input.ge(-1)
 
 
 class Conv2d_XnorPP(Module):
     """
-    Implement convolutional layer with binary weights and activations, following Case 2
+    Implement convolutional layer with binary weights and activations, following Case 1
     of XNOR-Net++.
     """
 
