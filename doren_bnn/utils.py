@@ -19,6 +19,8 @@ class Dataset(Enum):
 
 class Experiment:
     def __init__(self, id: str | None, dataset: Dataset, batch_size: int):
+        torch.manual_seed(0)  # ensure train/val split is reproducible
+
         self.data_path = Path("data/")
         self.train_path = self.data_path / "train"
         self.val_path = self.data_path / "val"
