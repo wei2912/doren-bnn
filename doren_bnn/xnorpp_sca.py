@@ -20,6 +20,10 @@ class Conv2d_XnorPP_SCA(Module):
             raise NotImplementedError("bias is not supported on Conv2d_SCA")
         del kwargs["bias"]
 
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+
         self.conv2d_params = kwargs
         conv2d = Conv2d(
             in_channels, out_channels, kernel_size, bias=False, **self.conv2d_params
@@ -32,7 +36,12 @@ class Conv2d_XnorPP_SCA(Module):
 
     def forward(self, input: Tensor) -> Tensor:
         weight_tanh = self.weight.tanh()
-        output = F.conv2d(Sign.apply(input), weight_tanh, **self.conv2d_params)
+        output = F.conv2d(
+            Sign.apply(input),
+            weight_tanh,
+            # weight_tanh if self.training else weight_tanh.round(),
+            **self.conv2d_params
+        )
         return output.mul(self.alpha)
 
     def wdr(self, alpha: float) -> Tensor:

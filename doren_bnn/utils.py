@@ -1,5 +1,7 @@
 import torch
-from torch.utils.data import DataLoader, Subset
+
+# from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, Resize, Normalize, ToTensor
@@ -47,17 +49,19 @@ class Experiment:
 
         loader_params = {"batch_size": batch_size, "pin_memory": True}
         self.train_loader = DataLoader(
-            # self.train_set,
-            Subset(self.train_set, torch.randperm(len(self.train_set))[:10000]),
+            self.train_set,
+            # Subset(self.train_set, torch.randperm(len(self.train_set))[:5000]),
             **loader_params
         )
         self.val_loader = DataLoader(
-            # self.val_set,
-            Subset(self.val_set, torch.randperm(len(self.val_set))[:2000]),
+            self.val_set,
+            # Subset(self.val_set, torch.randperm(len(self.val_set))[:1000]),
             **loader_params
         )
         self.test_loader = DataLoader(
-            Subset(self.val_set, torch.randperm(len(self.val_set))[:2]), **loader_params
+            self.val_set,
+            # Subset(self.val_set, torch.randperm(len(self.val_set))[:1000]),
+            **loader_params
         )
 
     def save_checkpoint(self, model, optimizer, scheduler, val_loss: float, epoch: int):
@@ -101,10 +105,10 @@ class Experiment:
             last_epoch + 1, num_epochs, initial=last_epoch + 1, total=num_epochs
         ):
             # FIXME: abstract out calculation of lamb into an actual lambda function
-            if epoch < 25:
+            if epoch < 50:
                 kwargs["lamb"] = 0
             else:
-                kwargs["lamb"] = lamb * (10 ** (-(num_epochs - epoch) // 25))
+                kwargs["lamb"] = lamb * (10 ** -((num_epochs - epoch) // 50))
             self.writer.add_scalar("Train/lamb", kwargs["lamb"], epoch)
 
             self.train_epoch(device, model, criterion, optimizer, epoch, **kwargs)
@@ -210,7 +214,7 @@ class Experiment:
             output = model(input)
             outputs.extend(output.squeeze().tolist())
             targets.extend(target.tolist())
-            print(output[:10])
+            # print(output[:10])
 
         end = time.monotonic()
         self.writer.add_scalar("Test/time", end - start, -1)
@@ -238,7 +242,7 @@ class Experiment:
             output = model_fhe(input)
             outputs.extend(output.squeeze().tolist())
             targets.extend(target.tolist())
-            print(output[:10])
+            # print(output[:10])
 
         end = time.monotonic()
         self.writer.add_scalar("Test-FHE/time", end - start, -1)
