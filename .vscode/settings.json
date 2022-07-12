@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "doren_bnn_concrete/Cargo.toml"
+    ]
+}
