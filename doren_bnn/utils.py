@@ -117,9 +117,11 @@ class Experiment:
             initial=self._last_epoch + 1,
             total=num_epochs,
         ):
-            hyperparams_val_dict = {
-                name: f(epoch) for name, f in hyperparams_dict.items()
-            }
+            hyperparams_val_dict = (
+                {name: f(epoch) for name, f in hyperparams_dict.items()}
+                if hyperparams_dict is not None
+                else {}
+            )
             kwargs = {**kwargs, **hyperparams_val_dict}
 
             self.train_epoch(model, criterion, optimizer, epoch, **kwargs)
