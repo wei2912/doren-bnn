@@ -13,14 +13,12 @@ from torch.nn import (
 from enum import Enum
 
 from .xnorpp import Conv2d_XnorPP
-from .xnor_react import Conv2d_Xnor_ReAct, RPReLU
 from .xnorpp_sca import Conv2d_XnorPP_SCA
 
 
 class NetType(Enum):
     REAL = "Real"
     XNORPP = "XnorPP"
-    XNOR_REACT = "Xnor-ReAct"
     XNORPP_SCA = "XnorPP-SCA"
 
 
@@ -36,43 +34,36 @@ class MobileNet_ConvBlock(MobileNet_Block):
         out_channels: int,
         stride: int,
         nettype: NetType,
+        **kwargs,
     ):
         super(MobileNet_ConvBlock, self).__init__()
-        self.nettype = nettype
 
-        block_params = {"stride": stride, "padding": 1, "bias": False}
+        block_params = {"stride": stride, "padding": 1, "bias": False, **kwargs}
 
-        self.block = {
-            NetType.REAL: Sequential(
-                Conv2d(in_channels, out_channels, 3, **block_params),
-                BatchNorm2d(out_channels),
-                ReLU(inplace=True),
-            ),
-            NetType.XNORPP: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_XnorPP(in_channels, out_channels, 3, **block_params),
-                ReLU(inplace=True),
-            ),
-            NetType.XNOR_REACT: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_Xnor_ReAct(in_channels, out_channels, 3, **block_params),
-                RPReLU(),
-            ),
-            NetType.XNORPP_SCA: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_XnorPP_SCA(in_channels, out_channels, 3, **block_params),
-                ReLU(inplace=True),
-            ),
-        }[nettype]
+        match nettype:
+            case NetType.REAL:
+                self.block = Sequential(
+                    Conv2d(in_channels, out_channels, 3, **block_params),
+                    BatchNorm2d(out_channels),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP:
+                self.block = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP(in_channels, out_channels, 3, **block_params),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP_SCA:
+                self.block = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP_SCA(in_channels, out_channels, 3, **block_params),
+                    ReLU(inplace=True),
+                )
+            case _:
+                raise NotImplementedError(f"nettype {nettype} not supported")
 
     def forward(self, input: Tensor) -> Tensor:
         return self.block(input)
-
-    def wdr(self, alpha: float) -> Tensor:
-        if not self.nettype == NetType.XNORPP_SCA:
-            return 0
-
-        return self.block[1].wdr(alpha)
 
 
 class MobileNet_ConvDsBlock(MobileNet_Block):
@@ -82,85 +73,74 @@ class MobileNet_ConvDsBlock(MobileNet_Block):
         out_channels: int,
         stride: int,
         nettype: NetType,
+        **kwargs,
     ):
         super(MobileNet_ConvDsBlock, self).__init__()
-        self.nettype = nettype
 
         block_dw_params = {
             "stride": stride,
             "padding": 1,
             "groups": in_channels,
             "bias": False,
+            **kwargs,
         }
-        self.block_dw = {
-            NetType.REAL: Sequential(
-                Conv2d(in_channels, in_channels, 3, **block_dw_params),
-                BatchNorm2d(in_channels),
-                ReLU(inplace=True),
-            ),
-            NetType.XNORPP: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_XnorPP(in_channels, in_channels, 3, **block_dw_params),
-                ReLU(inplace=True),
-            ),
-            NetType.XNOR_REACT: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_Xnor_ReAct(in_channels, in_channels, 3, **block_dw_params),
-                RPReLU(),
-            ),
-            NetType.XNORPP_SCA: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_XnorPP_SCA(in_channels, in_channels, 3, **block_dw_params),
-                ReLU(inplace=True),
-            ),
-        }[nettype]
+        match nettype:
+            case NetType.REAL:
+                self.block_dw = Sequential(
+                    Conv2d(in_channels, in_channels, 3, **block_dw_params),
+                    BatchNorm2d(in_channels),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP:
+                self.block_dw = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP(in_channels, in_channels, 3, **block_dw_params),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP_SCA:
+                self.block_dw = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP_SCA(in_channels, in_channels, 3, **block_dw_params),
+                    ReLU(inplace=True),
+                )
+            case _:
+                raise NotImplementedError(f"nettype {nettype} not supported")
 
         block_pw_params = {"stride": 1, "padding": 0, "bias": False}
-        self.block_pw = {
-            NetType.REAL: Sequential(
-                Conv2d(in_channels, out_channels, 1, **block_pw_params),
-                BatchNorm2d(out_channels),
-                ReLU(inplace=True),
-            ),
-            NetType.XNORPP: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_XnorPP(in_channels, out_channels, 1, **block_pw_params),
-                ReLU(inplace=True),
-            ),
-            NetType.XNOR_REACT: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_Xnor_ReAct(in_channels, out_channels, 1, **block_dw_params),
-                RPReLU(),
-            ),
-            NetType.XNORPP_SCA: Sequential(
-                BatchNorm2d(in_channels),
-                Conv2d_XnorPP_SCA(in_channels, out_channels, 1, **block_pw_params),
-                ReLU(inplace=True),
-            ),
-        }[nettype]
+        match nettype:
+            case NetType.REAL:
+                self.block_pw = Sequential(
+                    Conv2d(in_channels, out_channels, 1, **block_pw_params),
+                    BatchNorm2d(out_channels),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP:
+                self.block_pw = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP(in_channels, out_channels, 1, **block_pw_params),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP_SCA:
+                self.block_pw = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP_SCA(in_channels, out_channels, 1, **block_pw_params),
+                    ReLU(inplace=True),
+                )
+            case _:
+                raise NotImplementedError(f"nettype {nettype} not supported")
 
         self.block = Sequential(self.block_dw, self.block_pw)
 
     def forward(self, input: Tensor) -> Tensor:
         return self.block(input)
 
-    def wdr(self, alpha: float) -> Tensor:
-        if not self.nettype == NetType.XNORPP_SCA:
-            return 0
-
-        return self.block_dw[1].wdr(alpha) + self.block_pw[1].wdr(alpha)
-
 
 class MobileNet(Module):
     def __init__(self, in_channels: int, num_classes: int = 1000, **kwargs):
         super(MobileNet, self).__init__()
 
-        kwargs_real = {**kwargs}
-        kwargs_real["nettype"] = NetType.REAL
-
         self.upsample = Upsample((224, 224))
         self.model = Sequential(
-            # MobileNet_ConvBlock(in_channels, 32, 2, **kwargs_real),
             MobileNet_ConvBlock(in_channels, 32, 2, **kwargs),
             MobileNet_ConvDsBlock(32, 64, 1, **kwargs),
             MobileNet_ConvDsBlock(64, 128, 2, **kwargs),
@@ -174,7 +154,6 @@ class MobileNet(Module):
             MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
             MobileNet_ConvDsBlock(512, 512, 1, **kwargs),
             MobileNet_ConvDsBlock(512, 1024, 2, **kwargs),
-            # MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs_real),
             MobileNet_ConvDsBlock(1024, 1024, 1, **kwargs),
             AdaptiveAvgPool2d(1),
         )
@@ -184,11 +163,3 @@ class MobileNet(Module):
         up_input = self.upsample(input)
         output = self.model(up_input).view(-1, 1024)
         return self.fc(output)
-
-    def wdr(self, alpha: float) -> Tensor:
-        wdrs = [
-            layer.wdr(alpha) if isinstance(layer, MobileNet_Block) else 0.0
-            for layer in self.model
-        ]
-        # print(["{:.3f}".format(float(wdr)) for wdr in wdrs])
-        return sum(wdrs)

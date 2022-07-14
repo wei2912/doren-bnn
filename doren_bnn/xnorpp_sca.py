@@ -13,7 +13,14 @@ class Conv2d_XnorPP_SCA(Module):
     SCA and Case 2 of XNOR-Net++.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, **kwargs):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        test: bool = False,
+        **kwargs
+    ):
         super(Conv2d_XnorPP_SCA, self).__init__()
 
         if kwargs["bias"]:
@@ -24,22 +31,23 @@ class Conv2d_XnorPP_SCA(Module):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
 
+        self.test = test
+
         self.conv2d_params = kwargs
         conv2d = Conv2d(
             in_channels, out_channels, kernel_size, bias=False, **self.conv2d_params
         )
 
         self.weight = Parameter(conv2d.weight.detach().atanh())
-        # uniform distribution of {-1, 0, 1}
-        # nn.init.uniform_(self.weight, a=3*math.atanh(-0.5), b=3*math.atanh(0.5))
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
 
     def forward(self, input: Tensor) -> Tensor:
+        assert not (self.training and self.test)
+
         weight_tanh = self.weight.tanh()
         output = F.conv2d(
             Sign.apply(input),
-            weight_tanh,
-            # weight_tanh if self.training else weight_tanh.round(),
+            weight_tanh if not self.test else weight_tanh.round(),
             **self.conv2d_params
         )
         return output.mul(self.alpha)
