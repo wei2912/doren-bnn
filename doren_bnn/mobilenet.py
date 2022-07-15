@@ -14,12 +14,14 @@ from enum import Enum
 
 from .xnorpp import Conv2d_XnorPP
 from .xnorpp_sca import Conv2d_XnorPP_SCA
+from .xnorpp_sttn import Conv2d_XnorPP_STTN
 
 
 class NetType(Enum):
     REAL = "Real"
     XNORPP = "XnorPP"
     XNORPP_SCA = "XnorPP-SCA"
+    XNORPP_STTN = "XnorPP-STTN"
 
 
 class MobileNet_Block(Module):
@@ -57,6 +59,12 @@ class MobileNet_ConvBlock(MobileNet_Block):
                 self.block = Sequential(
                     BatchNorm2d(in_channels),
                     Conv2d_XnorPP_SCA(in_channels, out_channels, 3, **block_params),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP_STTN:
+                self.block = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP_STTN(in_channels, out_channels, 3, **block_params),
                     ReLU(inplace=True),
                 )
             case _:
@@ -103,6 +111,12 @@ class MobileNet_ConvDsBlock(MobileNet_Block):
                     Conv2d_XnorPP_SCA(in_channels, in_channels, 3, **block_dw_params),
                     ReLU(inplace=True),
                 )
+            case NetType.XNORPP_STTN:
+                self.block_dw = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP_STTN(in_channels, in_channels, 3, **block_dw_params),
+                    ReLU(inplace=True),
+                )
             case _:
                 raise NotImplementedError(f"nettype {nettype} not supported")
 
@@ -124,6 +138,12 @@ class MobileNet_ConvDsBlock(MobileNet_Block):
                 self.block_pw = Sequential(
                     BatchNorm2d(in_channels),
                     Conv2d_XnorPP_SCA(in_channels, out_channels, 1, **block_pw_params),
+                    ReLU(inplace=True),
+                )
+            case NetType.XNORPP_STTN:
+                self.block_pw = Sequential(
+                    BatchNorm2d(in_channels),
+                    Conv2d_XnorPP_STTN(in_channels, out_channels, 1, **block_pw_params),
                     ReLU(inplace=True),
                 )
             case _:

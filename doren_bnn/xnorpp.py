@@ -8,8 +8,8 @@ import torch.nn.functional as F
 
 class Sign(Function):
     r"""
-    Implement forward and backward pass for the sign function, following the approach of
-    XNOR-Net.
+    Implement forward and backward pass for the sign function, with the Hard-Tanh
+    function as the backward pass.
 
     For an input $r$,
     Forward pass: $\text{sign}(r)$, where $\text{sign}(r) = 1$ if $r > 0$, and $-1$
@@ -20,12 +20,12 @@ class Sign(Function):
     @staticmethod
     def forward(ctx, input: Tensor) -> Tensor:
         ctx.save_for_backward(input)
-        return 2 * input.gt(0).float() - 1
+        return 2.0 * input.gt(0.0) - 1.0
 
     @staticmethod
     def backward(ctx, grad_output: Tensor) -> Tensor:
         (input,) = ctx.saved_tensors
-        return grad_output.clone() * input.le(1) * input.ge(-1)
+        return grad_output.clone() * input.le(1.0) * input.ge(-1.0)
 
 
 class Conv2d_XnorPP(Module):
@@ -40,6 +40,10 @@ class Conv2d_XnorPP(Module):
         if kwargs["bias"]:
             raise NotImplementedError("bias is not supported on Conv2d_XnorPP")
         del kwargs["bias"]
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
 
         self.conv2d_params = kwargs
         conv2d = Conv2d(
