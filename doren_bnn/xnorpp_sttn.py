@@ -33,15 +33,18 @@ class Conv2d_XnorPP_STTN(Module):
         self.weight1 = Parameter(conv2d1.weight.detach())
         self.weight2 = Parameter(conv2d2.weight.detach())
 
-        # self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1) / 2.0)
-
     def forward(self, input: Tensor) -> Tensor:
         alpha = (
-            1.0
-            / (self.weight1.numel() + self.weight2.numel())
-            * (self.weight1.abs().sum() + self.weight2.abs().sum())
+            (
+                (
+                    self.weight1.abs().mean((1, 2, 3))
+                    + self.weight2.abs().mean((1, 2, 3))
+                )
+                / 2.0
+            )
+            .reshape(-1, 1, 1)
+            .to(input.device)
         )
-
         input_sign = Sign.apply(input)
         output1 = F.conv2d(input_sign, Sign.apply(self.weight1), **self.conv2d_params)
         output2 = F.conv2d(input_sign, Sign.apply(self.weight2), **self.conv2d_params)
