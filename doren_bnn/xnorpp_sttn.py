@@ -34,20 +34,16 @@ class Conv2d_XnorPP_STTN(Module):
         self.weight2 = Parameter(conv2d2.weight.detach())
 
     def forward(self, input: Tensor) -> Tensor:
-        alpha = (
-            (
-                (
-                    self.weight1.abs().mean((1, 2, 3))
-                    + self.weight2.abs().mean((1, 2, 3))
-                )
-                / 2.0
-            )
-            .reshape(-1, 1, 1)
-            .to(input.device)
+        alpha = self._get_channel_scaling().to(input.device)
+        output = F.conv2d(
+            Sign.apply(input), self._get_weight_ter(), **self.conv2d_params
         )
-        input_sign = Sign.apply(input)
-        output1 = F.conv2d(input_sign, Sign.apply(self.weight1), **self.conv2d_params)
-        output2 = F.conv2d(input_sign, Sign.apply(self.weight2), **self.conv2d_params)
-        return (output1 + output2).mul(alpha)
+        return output.mul(alpha)
 
-    # TODO: compute ternary weights from weight_1 and weight_2
+    def _get_channel_scaling(self) -> Tensor:
+        return (
+            self.weight1.abs().mean((1, 2, 3)) + self.weight2.abs().mean((1, 2, 3))
+        ).reshape(-1, 1, 1)
+
+    def _get_weight_ter(self) -> Tensor:
+        return (Sign.apply(self.weight1) + Sign.apply(self.weight2)) / 2.0
