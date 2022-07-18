@@ -11,7 +11,14 @@ class Conv2d_XnorPP_STTN(Module):
     Case 1 of XNOR-Net++.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, **kwargs):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        learnable: bool = False,
+        **kwargs
+    ):
         super(Conv2d_XnorPP_STTN, self).__init__()
 
         if kwargs["bias"]:
@@ -30,17 +37,24 @@ class Conv2d_XnorPP_STTN(Module):
             in_channels, out_channels, kernel_size, bias=False, **self.conv2d_params
         )
 
-        self.weight1 = Parameter(conv2d1.weight.detach())
-        self.weight2 = Parameter(conv2d2.weight.detach())
+        self.weight1 = Parameter(conv2d1.weight)
+        self.weight2 = Parameter(conv2d2.weight)
+
+        self.learnable = learnable
+        if self.learnable:
+            self.alpha = Parameter(self._calc_channel_scaling())
 
     def forward(self, input: Tensor) -> Tensor:
-        alpha = self._get_channel_scaling().to(input.device)
         output = F.conv2d(
             Sign.apply(input), self._get_weight_ter(), **self.conv2d_params
         )
-        return output.mul(alpha)
+        return output.mul(
+            self.alpha
+            if self.learnable
+            else self._calc_channel_scaling().to(input.device)
+        )
 
-    def _get_channel_scaling(self) -> Tensor:
+    def _calc_channel_scaling(self) -> Tensor:
         return (
             self.weight1.abs().mean((1, 2, 3)) + self.weight2.abs().mean((1, 2, 3))
         ).reshape(-1, 1, 1)
