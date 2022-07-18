@@ -120,7 +120,7 @@ class MobileNet_ConvDsBlock(MobileNet_Block):
             case _:
                 raise NotImplementedError(f"nettype {nettype} not supported")
 
-        block_pw_params = {"stride": 1, "padding": 0, "bias": False}
+        block_pw_params = {"stride": 1, "padding": 0, "bias": False, **kwargs}
         match nettype:
             case NetType.REAL:
                 self.block_pw = Sequential(
