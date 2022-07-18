@@ -38,7 +38,7 @@ class Conv2d_XnorPP_SCA(Module):
             in_channels, out_channels, kernel_size, bias=False, **self.conv2d_params
         )
 
-        self.weight = Parameter(conv2d.weight.detach().atanh())
+        self.weight = Parameter(conv2d.weight.atanh())
         self.alpha = Parameter(torch.ones(out_channels).reshape(-1, 1, 1))
 
     def forward(self, input: Tensor) -> Tensor:
