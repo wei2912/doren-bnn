@@ -1,75 +1,30 @@
 use anyhow::Result;
-use concrete::*;
-use doren_bnn_concrete::*;
-
-use std::fs;
-
-fn print_encoder(encoder: &Encoder) {
-    println!("{:?}", encoder);
-    println!(
-        "{:?}",
-        (
-            encoder.get_granularity(),
-            encoder.get_min(),
-            encoder.get_max(),
-            encoder.get_size()
-        )
-    );
-}
+use concrete::{prelude::*, set_server_key};
+use doren_bnn_concrete::{
+    convert_f64_to_bin, decrypt_vec, encrypt_vec, get_uint12_params, load_keys, multiply_and_sum,
+};
 
 fn main() -> Result<()> {
-    let mut rlwe_4096 = RLWE128_4096_1.clone();
-    rlwe_4096.log2_std_dev = -62; // set to bigger value that can be represented with 64 bits
-
-    // TODO: try precision 2?
-    for lwe_params in [
-        &LWE128_512,
-        &LWE128_630,
-        &LWE128_650,
-        &LWE128_688,
-        &LWE128_710,
-        &LWE128_750,
-        &LWE128_800,
-        &LWE128_830,
-        &LWE128_1024,
-        &LWE128_2048,
-    ] {
-        for rlwe_params in [&RLWE128_512_2, &RLWE128_1024_1, &RLWE128_2048_1, &rlwe_4096] {
-            for bsk_base_log in 2..12 {
-                for bsk_level in 2..12 {
-                    println!(
-                        "{:?}",
-                        (
-                            lwe_params.dimension,
-                            rlwe_params.polynomial_size,
-                            bsk_base_log,
-                            bsk_level
-                        )
-                    );
-                    println!(
-                        "Estimated summation width: {:?}",
-                        calc_bin_sum_width(lwe_params, rlwe_params, bsk_base_log, bsk_level)
-                    );
-                    println!();
-                }
-            }
-        }
-    }
-
-    let messages = vec![-1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0];
+    let messages = vec![1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0];
 
     println!("Before encryption: {:?}", messages);
 
-    fs::create_dir_all("sk/")?;
-    let (sk_lwe, ksk, bsk) = load_keys("sk/")?;
+    let (client_key, server_key, uint10_enc) = load_keys("keys_3x4/", get_uint12_params())?;
+    set_server_key(server_key);
     println!();
 
-    let c1 = encrypt_bin(&sk_lwe, &convert_f64_to_bin(&messages))?;
-    let o1 = decrypt(&sk_lwe, &c1)?;
+    let c1 = encrypt_vec(&client_key, &uint10_enc, &convert_f64_to_bin(&messages));
+    let o1 = decrypt_vec(&client_key, &c1);
     println!("After encryption + decryption: {:?}", o1);
-    print_encoder(&c1.encoders[0]);
-    println!();
 
+    let ws = vec![1, -1, -1, 1, 1, 1, -1, -1, -1];
+    println!("Weights: {:?}", ws);
+
+    let (c2, offset) = multiply_and_sum(c1, &ws);
+    let o2 = c2.map_or_else(|| 0, |x| x.decrypt(&client_key)) as i64 + offset;
+    println!("After linear: {:?}", o2);
+
+    /*
     let mut c2 = c1.clone();
     let weights = vec![1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0];
     apply_weights(&mut c2, &convert_f64_to_bin(&weights))?;
@@ -94,6 +49,7 @@ fn main() -> Result<()> {
     println!("Sign: {:?}", o5);
     print_encoder(&c5.encoders[0]);
     println!();
+    */
 
     Ok(())
 }

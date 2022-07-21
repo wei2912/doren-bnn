@@ -1,5 +1,8 @@
-use anyhow::Result;
-use concrete::{LWESecretKey, LWEBSK, LWEKSK};
+use concrete::prelude::*;
+use concrete::set_server_key;
+use concrete::ClientKey;
+use concrete::DynIntegerEncryptor;
+use concrete::ServerKey;
 use once_cell::sync::Lazy;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -12,15 +15,14 @@ mod base;
 pub use crate::base::*;
 mod nn;
 pub use crate::nn::*;
-mod npe;
-pub use crate::npe::*;
 mod toynet;
 pub use crate::toynet::*;
 
-static SK: Lazy<Mutex<(LWESecretKey, LWEKSK, LWEBSK)>> = Lazy::new(|| match load_keys("sk/") {
-    Ok(sk) => Mutex::new(sk),
-    Err(err) => panic!("{}", err),
-});
+static KEYS: Lazy<Mutex<(ClientKey, ServerKey, DynIntegerEncryptor)>> =
+    Lazy::new(|| match load_keys("keys", get_uint12_params()) {
+        Ok(data) => Mutex::new(data),
+        Err(err) => panic!("{}", err),
+    });
 
 fn make_error<E: Display + Sized>(e: E) -> PyErr {
     PyErr::new::<PyRuntimeError, _>(e.to_string())
@@ -29,41 +31,32 @@ fn make_error<E: Display + Sized>(e: E) -> PyErr {
 #[pyfunction]
 #[pyo3(name = "preload_keys")]
 fn preload_keys_py() -> PyResult<()> {
-    let _sk = SK.lock().map_err(make_error)?;
+    let _keys = &*KEYS.lock().map_err(make_error)?;
     Ok(())
 }
 
 #[pyfunction]
 #[pyo3(name = "toynet")]
-fn toynet_py(state_dict_py: &PyDict, input: Vec<f64>) -> PyResult<Vec<f64>> {
-    let sk = SK.lock().map_err(make_error)?;
-    let (sk_lwe, ksk, bsk) = &*sk;
+fn toynet_py(state_dict_py: &PyDict, input: Vec<f64>) -> PyResult<Vec<i64>> {
+    let (client_key, server_key, uint12_enc) = &*KEYS.lock().map_err(make_error)?;
+    set_server_key(server_key.clone());
 
-    let fc_weight: Vec<Vec<bool>> = match state_dict_py.get_item("fc.weight") {
-        Some(fc_weight_py) => fc_weight_py.extract(),
-        None => Err(make_error("fc.weight not found")),
-    }?;
-
-    let input_enc = encrypt_bin(
-        sk_lwe,
-        &input.into_iter().map(|x| x > 0.0).collect::<Vec<bool>>(),
-    )
-    .map_err(make_error)?;
+    let fc_weight: Vec<Vec<i8>> = state_dict_py.get_item("fc.weight").map_or_else(
+        || Err(make_error("fc.weight not found")),
+        |fc_weight_py| fc_weight_py.extract(),
+    )?;
+    let input_enc = encrypt_vec(&client_key, &uint12_enc, &convert_f64_to_bin(&input));
 
     let state_dict = ToyNetStateDict { fc_weight };
-    let output_enc = toynet(sk_lwe, ksk, bsk, &state_dict, &input_enc).map_err(make_error)?;
+    let output_enc = toynet(state_dict, input_enc);
 
-    let output = output_enc
+    let output_dec = output_enc
         .into_iter()
-        .map(|ct| {
-            decrypt(sk_lwe, &ct).map(|vec| {
-                assert!(vec.len() == 1);
-                vec[0]
-            })
-        })
-        .collect::<Result<Vec<f64>>>()
-        .map_err(make_error)?;
-    Ok(output)
+        .map(|(opt, offset)| opt.map_or_else(|| 0, |x| x.decrypt(&client_key)) as i64 + offset)
+        .collect::<Vec<_>>();
+    println!("{:?}", output_dec);
+
+    Ok(vec![])
 }
 
 #[pymodule]

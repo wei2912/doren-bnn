@@ -9,9 +9,17 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "^1.0.56"
-concrete = "=0.1.11"
+bincode = "^1.3.3"
+concrete = { version = "=0.2.0-beta.1", features = ["shortints", "integers", "serde"] }
 concrete-commons = "=0.2.0"
-concrete-npe = "=0.2.1"
 once_cell = "^1.12.0"
 pyo3 = { version = "^0.16.5", features = ["extension-module"] }
 rayon = "^1.5.3"
+
+[dev-dependencies]
+criterion = { version = "^0.3.6", features = ["html_reports"] }
+rand = "^0.8.5"
+
+[[bench]]
+name = "nn_benchmark"
+harness = false

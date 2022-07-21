@@ -14,4 +14,4 @@ Cargo.lock
 *.pdb
 
 # Repository-specific files
-sk/
+keys*/
