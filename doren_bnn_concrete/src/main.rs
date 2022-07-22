@@ -1,5 +1,6 @@
 use anyhow::Result;
 use concrete::{prelude::*, set_server_key};
+
 use doren_bnn_concrete::{
     convert_f64_to_bin, decrypt_vec, encrypt_vec, get_uint12_params, load_keys, multiply_and_sum,
 };

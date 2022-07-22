@@ -30,8 +30,7 @@ fn multiply_and_sum_bm(c: &mut Criterion) {
     let act_vals: Vec<f64> = vec![-1.0, 1.0];
     let weight_vals: Vec<i8> = vec![-1, 1]; // assume zero sparsity
 
-    c.sample_size(500);
-
+    // Takes ~3ms/it.
     c.bench_function("multiply_and_sum dw", |b| {
         b.iter_batched(
             || {
@@ -45,7 +44,7 @@ fn multiply_and_sum_bm(c: &mut Criterion) {
         )
     });
 
-    /* Takes ~7.5 mins/it.
+    /* Takes ~7.5mins/it.
      * c.bench_function("multiply_and_sum pw", |b| {
      *     b.iter_batched(
      *         || {
