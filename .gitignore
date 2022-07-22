@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 # Repository-specific files
-doren_bnn_concrete/sk*/
+doren_bnn_concrete/keys*
 experiments/data/
 experiments/runs/
+experiments/keys*
