@@ -42,6 +42,8 @@ class MobileNet_ConvBlock(MobileNet_Block):
 
         block_params = {"stride": stride, "padding": 1, "bias": False, **kwargs}
 
+        # For BNNs, the initial BatchNorm2d layer is omitted as it is assumed that the
+        # input data has been normalised to mean 0 and variance 1.
         match nettype:
             case NetType.REAL:
                 self.block = Sequential(
@@ -51,19 +53,16 @@ class MobileNet_ConvBlock(MobileNet_Block):
                 )
             case NetType.XNORPP:
                 self.block = Sequential(
-                    BatchNorm2d(in_channels),
                     Conv2d_XnorPP(in_channels, out_channels, 3, **block_params),
                     ReLU(inplace=True),
                 )
             case NetType.XNORPP_SCA:
                 self.block = Sequential(
-                    BatchNorm2d(in_channels),
                     Conv2d_XnorPP_SCA(in_channels, out_channels, 3, **block_params),
                     ReLU(inplace=True),
                 )
             case NetType.XNORPP_STTN:
                 self.block = Sequential(
-                    BatchNorm2d(in_channels),
                     Conv2d_XnorPP_STTN(in_channels, out_channels, 3, **block_params),
                     ReLU(inplace=True),
                 )

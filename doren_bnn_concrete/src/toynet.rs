@@ -1,23 +1,18 @@
-use concrete::*;
+use concrete::DynShortInt;
 
-use crate::linear;
+use crate::{linear, relu_batchnorm, BatchNormState, FheInt, LinearState};
 
-pub struct ToyNetStateDict {
-    pub fc_weight: Vec<Vec<i8>>,
+pub struct ToyNetState {
+    pub block_0: LinearState,
+    pub block_1: BatchNormState,
 }
 
 pub fn toynet(
-    state_dict: ToyNetStateDict,
-    input: Vec<DynInteger>,
-) -> Vec<(Option<DynInteger>, i64)> {
-    let fc_weight = state_dict.fc_weight;
-    linear(input, fc_weight)
-
-    /*
-    let output2 = output
-        .iter()
-        .map(|x| sign(ksk, bsk, x))
-        .collect::<Result<Vec<VectorLWE>, _>>()?;
-    println!("{:?}", output2[0].encoders[0]);
-    */
+    state_dict: ToyNetState,
+    input: Vec<FheInt<u8, DynShortInt>>,
+) -> Vec<FheInt<u8, DynShortInt>> {
+    let ToyNetState { block_0, block_1 } = state_dict;
+    let block_0_output = linear(input, block_0);
+    let block_1_output = relu_batchnorm(block_0_output, block_1);
+    block_1_output
 }

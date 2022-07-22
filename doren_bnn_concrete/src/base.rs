@@ -1,31 +1,36 @@
 use anyhow::Result;
 use concrete::{
-    generate_keys, ClientKey, ConfigBuilder, DynInteger, DynIntegerEncryptor, DynIntegerParameters,
-    ServerKey,
+    generate_keys,
+    prelude::{DynamicFheEncryptor, DynamicFheTryEncryptor},
+    ClientKey, ConfigBuilder, DynIntegerEncryptor, DynIntegerParameters, DynShortIntEncryptor,
+    FheUint4Parameters, ServerKey,
 };
-use concrete::{prelude::*, FheUint4Parameters};
 
-use std::fs;
 use std::fs::File;
 use std::path::Path;
+use std::{error::Error, fs};
+
+use crate::{FheInt, FheIntCiphertext, FheIntPlaintext};
+
+pub fn get_uint4_config() -> (ConfigBuilder, DynShortIntEncryptor) {
+    let mut config = ConfigBuilder::all_disabled();
+    let uint_enc = config.add_short_int_type(FheUint4Parameters::default().into());
+    (config, uint_enc)
+}
+
+pub fn get_uint12_config() -> (ConfigBuilder, DynIntegerEncryptor) {
+    let mut config = ConfigBuilder::all_disabled();
+    let uint_enc = config.add_integer_type(DynIntegerParameters {
+        block_parameters: FheUint4Parameters::default().into(),
+        num_block: 3,
+    });
+    (config, uint_enc)
+}
 
 const CLIENT_KEY_FILENAME: &str = "client_key";
 const SERVER_KEY_FILENAME: &str = "server_key";
 
-pub fn get_uint12_params() -> DynIntegerParameters {
-    DynIntegerParameters {
-        block_parameters: FheUint4Parameters::default().into(),
-        num_block: 3,
-    }
-}
-
-pub fn load_keys(
-    keys_path_str: &str,
-    int_params: DynIntegerParameters,
-) -> Result<(ClientKey, ServerKey, DynIntegerEncryptor)> {
-    let mut config = ConfigBuilder::all_disabled();
-    let uint_enc = config.add_integer_type(int_params);
-
+pub fn load_keys(keys_path_str: &str, config: ConfigBuilder) -> Result<(ClientKey, ServerKey)> {
     let keys_path = Path::new(&keys_path_str);
     let client_key_path = keys_path.join(CLIENT_KEY_FILENAME);
     let server_key_path = keys_path.join(SERVER_KEY_FILENAME);
@@ -44,7 +49,7 @@ pub fn load_keys(
             let sk: ServerKey = bincode::deserialize_from(sk_file)?;
 
             println!("Existing client & server keys loaded.");
-            Ok((ck, sk, uint_enc))
+            Ok((ck, sk))
         }
         _ => {
             println!("Generating client & server keys...");
@@ -58,29 +63,48 @@ pub fn load_keys(
             bincode::serialize_into(sk_file, &sk)?;
 
             println!("Client & server keys generated.");
-            Ok((ck, sk, uint_enc))
+            Ok((ck, sk))
         }
     }
 }
 
-pub fn convert_f64_to_bin(input: &[f64]) -> Vec<u64> {
-    input.iter().map(|x| (*x > 0.0) as u64).collect()
+pub fn convert_f64_to_bin_pm(input: &[f64]) -> Vec<bool> {
+    input.iter().map(|x| *x > 0.0).collect()
 }
 
-pub fn encrypt_vec(
+pub fn encrypt_vec_bin_pm<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
     client_key: &ClientKey,
-    uint_enc: &DynIntegerEncryptor,
-    input: &[u64],
-) -> Vec<DynInteger> {
-    input
-        .into_iter()
-        .map(|pt| uint_enc.encrypt(*pt, client_key))
+    uint_enc: &dyn DynamicFheEncryptor<T, FheType = U>,
+    pts: &[bool],
+) -> Vec<FheInt<T, U>> {
+    let enc_func = |pt: T| uint_enc.encrypt(pt, client_key);
+    pts.iter()
+        .map(|pt| FheInt::encrypt_bin_pm(&enc_func, *pt))
         .collect::<Vec<_>>()
 }
 
-pub fn decrypt_vec(client_key: &ClientKey, input: &[DynInteger]) -> Vec<u64> {
+pub fn try_encrypt_vec_bin_pm<
+    T: FheIntPlaintext,
+    U: FheIntCiphertext<T>,
+    E: Error + Sync + Send + 'static,
+>(
+    client_key: &ClientKey,
+    uint_try_enc: &dyn DynamicFheTryEncryptor<T, FheType = U, Error = E>,
+    pts: &[bool],
+) -> Result<Vec<FheInt<T, U>>> {
+    let try_enc_func = |pt: T| uint_try_enc.try_encrypt(pt, client_key);
+    Ok(pts
+        .iter()
+        .map(|pt| FheInt::try_encrypt_bin_pm(&try_enc_func, *pt))
+        .collect::<Result<Vec<_>, _>>()?)
+}
+
+pub fn decrypt_vec<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
+    client_key: &ClientKey,
+    input: &[FheInt<T, U>],
+) -> Vec<f64> {
     input
-        .into_iter()
-        .map(|ct| ct.decrypt(client_key))
+        .iter()
+        .map(|ct| ct.decrypt(&client_key))
         .collect::<Vec<_>>()
 }

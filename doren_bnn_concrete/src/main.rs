@@ -1,8 +1,9 @@
 use anyhow::Result;
-use concrete::{prelude::*, set_server_key};
+use concrete::set_server_key;
 
 use doren_bnn_concrete::{
-    convert_f64_to_bin, decrypt_vec, encrypt_vec, get_uint12_params, load_keys, multiply_and_sum,
+    convert_f64_to_bin_pm, decrypt_vec, get_uint4_config, load_keys, multiply_and_sum,
+    try_encrypt_vec_bin_pm,
 };
 
 fn main() -> Result<()> {
@@ -10,20 +11,21 @@ fn main() -> Result<()> {
 
     println!("Before encryption: {:?}", messages);
 
-    let (client_key, server_key, uint10_enc) = load_keys("keys_3x4/", get_uint12_params())?;
+    let (config, uint4_enc) = get_uint4_config();
+    let (client_key, server_key) = load_keys("keys_4/", config)?;
     set_server_key(server_key);
     println!();
 
-    let c1 = encrypt_vec(&client_key, &uint10_enc, &convert_f64_to_bin(&messages));
+    let c1 = try_encrypt_vec_bin_pm(&client_key, &uint4_enc, &convert_f64_to_bin_pm(&messages))?;
     let o1 = decrypt_vec(&client_key, &c1);
     println!("After encryption + decryption: {:?}", o1);
 
     let ws = vec![1, -1, -1, 1, 1, 1, -1, -1, -1];
     println!("Weights: {:?}", ws);
 
-    let (c2, offset) = multiply_and_sum(c1, &ws);
-    let o2 = c2.map_or_else(|| 0, |x| x.decrypt(&client_key)) as i64 + offset;
-    println!("After linear: {:?}", o2);
+    let c2 = multiply_and_sum(c1, &ws);
+    let o2 = decrypt_vec(&client_key, &vec![c2]);
+    println!("After multiply & sum: {:?}", o2);
 
     /*
     let mut c2 = c1.clone();

@@ -1,9 +1,9 @@
 use std::iter;
 
-use concrete::{set_server_key, DynInteger};
+use concrete::set_server_key;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use doren_bnn_concrete::{
-    convert_f64_to_bin, encrypt_vec, get_uint12_params, load_keys, multiply_and_sum,
+    convert_f64_to_bin_pm, encrypt_vec_bin_pm, get_uint12_config, load_keys, multiply_and_sum,
 };
 use rand::seq::SliceRandom;
 
@@ -20,12 +20,12 @@ fn gen_inputs<T: Copy>(vals: &Vec<T>, size: usize) -> Vec<T> {
 }
 
 fn multiply_and_sum_bm(c: &mut Criterion) {
-    let (client_key, server_key, uint12_enc) = load_keys("keys_3x4/", get_uint12_params()).unwrap();
+    let (config, uint12_enc) = get_uint12_config();
+    let (client_key, server_key) = load_keys("keys_3x4/", config).unwrap();
     set_server_key(server_key);
 
-    let encrypt = |ps: Vec<f64>| -> Vec<DynInteger> {
-        encrypt_vec(&client_key, &uint12_enc, &convert_f64_to_bin(&ps))
-    };
+    let encrypt =
+        |ps: Vec<f64>| encrypt_vec_bin_pm(&client_key, &uint12_enc, &convert_f64_to_bin_pm(&ps));
 
     let act_vals: Vec<f64> = vec![-1.0, 1.0];
     let weight_vals: Vec<i8> = vec![-1, 1]; // assume zero sparsity
