@@ -18,12 +18,14 @@ fn main() -> Result<()> {
 
     let c1 = try_encrypt_vec_bin_pm(&client_key, &uint4_enc, &convert_f64_to_bin_pm(&messages))?;
     let o1 = decrypt_vec(&client_key, &c1);
+    println!("{:?}", c1);
     println!("After encryption + decryption: {:?}", o1);
 
-    let ws = vec![1, -1, -1, 1, 1, 1, -1, -1, -1];
+    let ws = vec![1, 0, -1, 1, 0, 0, 1, 0, -1];
     println!("Weights: {:?}", ws);
 
     let c2 = multiply_and_sum(c1, &ws);
+    println!("{:?}", c2);
     let o2 = decrypt_vec(&client_key, &vec![c2]);
     println!("After multiply & sum: {:?}", o2);
 

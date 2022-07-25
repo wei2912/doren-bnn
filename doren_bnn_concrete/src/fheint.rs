@@ -1,6 +1,7 @@
 use anyhow::Result;
 use concrete::{prelude::*, ClientKey, DynInteger, DynShortInt};
 
+use std::fmt::{Debug, Error, Formatter};
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
 /* Define a new trait for primitive casting which might cause loss in precision. */
@@ -21,7 +22,7 @@ impl Cast<f64> for u64 {
 }
 
 pub trait FheIntPlaintext:
-    From<u8> + Cast<f64> + Add<Output = Self> + AddAssign + Copy + Clone + Send
+    From<u8> + Cast<f64> + Add<Output = Self> + AddAssign + Copy + Clone + Debug + Send
 {
 }
 
@@ -81,6 +82,12 @@ impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> FheInt<T, U> {
     }
 }
 
+impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Debug for FheInt<T, U> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "(?, {:?}, {:?})", self.1, self.2)
+    }
+}
+
 impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Add for FheInt<T, U> {
     type Output = FheInt<T, U>;
 
@@ -106,12 +113,11 @@ impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Add for &FheInt<T, U> {
 impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> AddAssign for FheInt<T, U> {
     fn add_assign(&mut self, rhs: Self) {
         match self.0.as_mut() {
-            Some(x0) => match rhs.0 {
-                Some(y0) => {
+            Some(x0) => {
+                if let Some(y0) = rhs.0 {
                     *x0 += y0;
                 }
-                None => {}
-            },
+            }
             None => {
                 self.0 = rhs.0;
             }
@@ -128,7 +134,7 @@ impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Neg for FheInt<T, U> {
         match self.0 {
             Some(x0) => FheInt(
                 Some((-x0) + self.2.clone()),
-                self.1 as f64 - self.2.clone().cast(),
+                -self.1 as f64 - self.2.clone().cast(),
                 self.2,
             ),
             None => panic!("neg is not implemented for None"),
@@ -174,7 +180,7 @@ pub trait FheIntBootstrap<T: FheIntPlaintext + Cast<f64>>: Clone + Send {
     fn apply<F: Fn(f64) -> u64>(&mut self, func: F, offset: f64, max_val: T);
 }
 
-impl<T: FheIntPlaintext + Cast<f64>, U: FheIntCiphertext<T> + FheBootstrap> FheIntBootstrap<T>
+impl<T: FheIntPlaintext, U: FheIntCiphertext<T> + FheBootstrap> FheIntBootstrap<T>
     for FheInt<T, U>
 {
     fn map<F: Fn(f64) -> u64>(&self, func: F, offset: f64, max_val: T) -> Self {

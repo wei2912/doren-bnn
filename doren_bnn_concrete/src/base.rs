@@ -35,37 +35,40 @@ pub fn load_keys(keys_path_str: &str, config: ConfigBuilder) -> Result<(ClientKe
     let client_key_path = keys_path.join(CLIENT_KEY_FILENAME);
     let server_key_path = keys_path.join(SERVER_KEY_FILENAME);
 
-    match vec![&client_key_path, &server_key_path]
+    let files = vec![&client_key_path, &server_key_path]
         .into_iter()
         .map(|path| File::open(path))
-        .collect::<Result<Vec<_>, _>>()
-        .as_deref()
-    {
-        Ok([ck_file, sk_file]) => {
-            println!("Loading existing client & server keys...");
+        .collect::<Result<Vec<_>, _>>();
 
-            // FIXME: Add error checking to ensure keys are compatible with config
-            let ck: ClientKey = bincode::deserialize_from(ck_file)?;
-            let sk: ServerKey = bincode::deserialize_from(sk_file)?;
+    if let Ok([ck_file, sk_file]) = files.as_deref() {
+        println!("Loading existing client & server keys...");
 
-            println!("Existing client & server keys loaded.");
-            Ok((ck, sk))
-        }
-        _ => {
-            println!("Generating client & server keys...");
-
-            fs::create_dir_all(keys_path)?;
-            let ck_file = File::create(client_key_path)?;
-            let sk_file = File::create(server_key_path)?;
-
-            let (ck, sk) = generate_keys(config);
-            bincode::serialize_into(ck_file, &ck)?;
-            bincode::serialize_into(sk_file, &sk)?;
-
-            println!("Client & server keys generated.");
-            Ok((ck, sk))
+        // FIXME: Add error checking to ensure keys are compatible with config
+        let keys = (
+            bincode::deserialize_from(ck_file),
+            bincode::deserialize_from(sk_file),
+        );
+        match keys {
+            (Ok(ck), Ok(sk)) => {
+                println!("Existing client & server keys loaded.");
+                return Ok((ck, sk));
+            }
+            _ => println!("Loading of client & server keys failed."),
         }
     }
+
+    println!("Generating new client & server keys...");
+
+    fs::create_dir_all(keys_path)?;
+    let ck_file = File::create(client_key_path)?;
+    let sk_file = File::create(server_key_path)?;
+
+    let (ck, sk) = generate_keys(config);
+    bincode::serialize_into(ck_file, &ck)?;
+    bincode::serialize_into(sk_file, &sk)?;
+
+    println!("Client & server keys generated.");
+    Ok((ck, sk))
 }
 
 pub fn convert_f64_to_bin_pm(input: &[f64]) -> Vec<bool> {
