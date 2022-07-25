@@ -1,89 +1,59 @@
+use concrete::prelude::FheBootstrap;
 use itertools::izip;
 use rayon::prelude::*;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::AddAssign,
+    sync::{Arc, Mutex},
+};
 
 use crate::{FheInt, FheIntBootstrap, FheIntCiphertext, FheIntPlaintext};
 
 /**
  * Invariant: xs should only contain encryption of -1 or 1 (no way to verify in code)
  */
-pub fn multiply_and_sum<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
-    xs: Vec<FheInt<T, U>>,
+pub fn multiply_and_sum<
+    T: FheIntPlaintext,
+    U: for<'a> FheIntCiphertext<'a, T> + for<'a> AddAssign<&'a U>,
+>(
+    xs: &[FheInt<T, U>],
     ws: &[i8],
 ) -> FheInt<T, U> {
     assert!(xs.len() == ws.len());
-    assert!(ws.into_iter().all(|w| *w == 0 || *w == -1 || *w == 1));
 
-    let xws = xs
-        .into_iter()
-        .zip(ws)
-        .filter(|(_, w)| **w != 0)
-        .collect::<Vec<_>>();
+    let xws = xs.into_iter().zip(ws).collect::<Vec<_>>();
 
-    // Subroutine: Combine 2-chunks of (x, w) into a single FheInt
-    // TODO: See if mutating would be more efficient.
-    let dyn_ints = xws
-        .chunks(2)
-        .map(|chunk| match chunk {
-            [(x1, w1), (x2, w2)] => match (w1, w2) {
-                (1, 1) => x1 + x2,
-                (1, -1) => x1 - x2,
-                (-1, 1) => x2 - x1,
-                (-1, -1) => &(-x1) - x2, // FIXME
-                _ => panic!("chunk weights should be either -1 or 1"),
-            },
-            [(x1, w1)] => match w1 {
-                1 => x1.clone(), // FIXME
-                -1 => -x1,
-                _ => panic!("chunk weights should be either -1 or 1"),
-            },
-            _ => panic!("chunks should be either singleton or of length 2"),
-        })
-        .collect::<Vec<_>>();
-
-    sum(dyn_ints)
-}
-
-fn sum<T: FheIntPlaintext, U: FheIntCiphertext<T>>(mut xs: Vec<FheInt<T, U>>) -> FheInt<T, U> {
-    // TODO: See if mutating would be more efficient.
-    while xs.len() > 1 {
-        let ys = xs
-            .chunks(2)
-            .map(|chunk| match chunk {
-                [x1, x2] => x1 + x2,
-                [x] => x.clone(),
-                _ => panic!("chunks should be either singleton or of length 2"),
-            })
-            .collect::<Vec<_>>();
-        xs = ys;
+    let mut x = FheInt::zero();
+    for (y, w) in xws {
+        match w {
+            1 => x += y,
+            -1 => x -= y,
+            0 => {}
+            _ => panic!("weights should be either -1 or 1"),
+        }
     }
-
-    match &xs[..] {
-        [] => FheInt::zero(),
-        [x] => x.clone(),
-        _ => panic!("final vector should have length <= 1"),
-    }
+    x
 }
 
 pub struct LinearState {
     pub weight: Vec<Vec<i8>>,
 }
 
-pub fn linear<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
-    xs: Vec<FheInt<T, U>>,
+pub fn linear<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + for<'a> AddAssign<&'a U>>(
+    xs: &[FheInt<T, U>],
     state: LinearState,
 ) -> Vec<FheInt<T, U>> {
-    let xs_arc = Arc::new(Mutex::new(xs));
+    let xs_arc = Arc::new(Mutex::new(xs.to_vec()));
     let LinearState { weight: wss } = state;
     wss.par_iter()
         .map(|ws| {
             let xs_arc_clone = xs_arc.clone();
             let xs = xs_arc_clone.lock().unwrap();
+
             let xs_clone = (*xs).clone();
             drop(xs); // release lock on xs before end of scope for other threads
 
-            multiply_and_sum(xs_clone, ws)
+            multiply_and_sum(&xs_clone, ws)
         })
         .collect::<Vec<_>>()
 }
@@ -97,10 +67,10 @@ pub struct BatchNormState {
 
 const EPS: f64 = 1e-5;
 
-pub fn relu_batchnorm<T: FheIntPlaintext, U: FheIntBootstrap<T>>(
-    xs: Vec<U>,
+pub fn relu_batchnorm<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap>(
+    xs: &[FheInt<T, U>],
     state: BatchNormState,
-) -> Vec<U> {
+) -> Vec<FheInt<T, U>> {
     let BatchNormState {
         weight,
         bias,
@@ -122,7 +92,7 @@ pub fn relu_batchnorm<T: FheIntPlaintext, U: FheIntBootstrap<T>>(
     let f = |x, g, b, e, v| sign(bn(relu(x), g, b, e, v));
 
     let is = xs.iter().enumerate().map(|(i, _)| i).collect::<Vec<_>>();
-    let xs_arc = Arc::new(Mutex::new(xs));
+    let xs_arc = Arc::new(Mutex::new(xs.to_vec()));
     izip!(is, weight, bias, running_mean, running_var)
         .par_bridge()
         .map(|(i, g, b, e, v)| {

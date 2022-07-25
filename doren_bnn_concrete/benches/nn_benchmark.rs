@@ -8,7 +8,7 @@ use doren_bnn_concrete::{
 use rand::seq::SliceRandom;
 
 const INPUT_SIZE_DW: usize = 9;
-// const INPUT_SIZE_PW: usize = 256;
+const INPUT_SIZE_PW: usize = 256;
 
 fn gen_inputs<T: Copy>(vals: &Vec<T>, size: usize) -> Vec<T> {
     let mut rng = rand::thread_rng();
@@ -39,25 +39,24 @@ fn multiply_and_sum_bm(c: &mut Criterion) {
                     gen_inputs(&weight_vals, INPUT_SIZE_DW),
                 )
             },
-            |(cs, ws)| multiply_and_sum(cs, &ws),
+            |(cs, ws)| multiply_and_sum(&cs, &ws),
             BatchSize::PerIteration,
         )
     });
 
-    /* Takes ~7.5mins/it.
-     * c.bench_function("multiply_and_sum pw", |b| {
-     *     b.iter_batched(
-     *         || {
-     *             (
-     *                 encrypt(gen_inputs(&act_vals, INPUT_SIZE_PW)),
-     *                 gen_inputs(&weight_vals, INPUT_SIZE_PW),
-     *             )
-     *         },
-     *         |(cs, ws)| multiply_and_sum(cs, &ws),
-     *         BatchSize::PerIteration,
-     *     )
-     * });
-     */
+    // Takes ~7.5mins/it.
+    c.bench_function("multiply_and_sum pw", |b| {
+        b.iter_batched(
+            || {
+                (
+                    encrypt(gen_inputs(&act_vals, INPUT_SIZE_PW)),
+                    gen_inputs(&weight_vals, INPUT_SIZE_PW),
+                )
+            },
+            |(cs, ws)| multiply_and_sum(&cs, &ws),
+            BatchSize::PerIteration,
+        )
+    });
 }
 
 criterion_group!(benches, multiply_and_sum_bm);

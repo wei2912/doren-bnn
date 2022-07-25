@@ -1,6 +1,7 @@
 use anyhow::Result;
 use concrete::{prelude::*, ClientKey, DynInteger, DynShortInt};
 
+use std::borrow::Borrow;
 use std::fmt::{Debug, Error, Formatter};
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
@@ -29,11 +30,13 @@ pub trait FheIntPlaintext:
 impl FheIntPlaintext for u8 {}
 impl FheIntPlaintext for u64 {}
 
-pub trait FheIntCiphertext<T: FheIntPlaintext>:
-    FheDecrypt<T>
+pub trait FheIntCiphertext<'a, T: FheIntPlaintext>:
+    'a
+    + FheDecrypt<T>
     + Add<Output = Self>
     + Add<T, Output = Self>
-    + AddAssign
+    + AddAssign<Self>
+    + AddAssign<&'a Self>
     + Neg<Output = Self>
     + Sub<Output = Self>
     + Sub<T, Output = Self>
@@ -44,8 +47,8 @@ pub trait FheIntCiphertext<T: FheIntPlaintext>:
 {
 }
 
-impl FheIntCiphertext<u8> for DynShortInt {}
-impl FheIntCiphertext<u64> for DynInteger {}
+impl FheIntCiphertext<'_, u8> for DynShortInt {}
+impl FheIntCiphertext<'_, u64> for DynInteger {}
 
 /* Wrapper struct for FHE unsigned integers with an f64 offset, added to the plaintext
  * upon decryption, and a max value.
@@ -54,11 +57,15 @@ impl FheIntCiphertext<u64> for DynInteger {}
  * represents an integer in the range [0, max value].
  */
 #[derive(Clone)]
-pub struct FheInt<T: FheIntPlaintext, U: FheIntCiphertext<T>>(Option<U>, f64, T);
+pub struct FheInt<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>>(Option<U>, f64, T);
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> FheInt<T, U> {
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> FheInt<T, U> {
     pub fn zero() -> Self {
         FheInt(None, 0.0, 0.into())
+    }
+
+    pub fn zero_with_offset(x: f64) -> Self {
+        FheInt(None, x, 0.into())
     }
 
     pub fn encrypt_bin_pm<F: Fn(T) -> U>(enc_func: F, pt: bool) -> Self {
@@ -76,50 +83,66 @@ impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> FheInt<T, U> {
 
     pub fn decrypt(&self, client_key: &ClientKey) -> f64 {
         let FheInt(opt, offset, _) = self;
-        opt.to_owned()
+        opt.as_ref()
             .map_or_else(|| 0.0, |ct| ct.decrypt(client_key).cast())
             + offset
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Debug for FheInt<T, U> {
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Debug for FheInt<T, U> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "(?, {:?}, {:?})", self.1, self.2)
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Add for FheInt<T, U> {
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>, B> Add<B> for &FheInt<T, U>
+where
+    B: Borrow<FheInt<T, U>>,
+{
     type Output = FheInt<T, U>;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        let z = match (self.0, rhs.0) {
-            (Some(x0), Some(y0)) => Some(x0 + y0),
-            (Some(x0), None) => Some(x0),
-            (None, Some(y0)) => Some(y0),
-            (None, None) => None,
-        };
-        FheInt(z, self.1 + rhs.1, self.2 + rhs.2)
+    fn add(self, rhs: B) -> Self::Output {
+        let rhs = rhs.borrow();
+        FheInt(
+            match (&self.0, &rhs.0) {
+                (Some(x0), Some(y0)) => Some(x0.clone() + y0.clone()),
+                (Some(x0), None) => Some(x0.clone()),
+                (None, Some(y0)) => Some(y0.clone()),
+                (None, None) => None,
+            },
+            self.1 + rhs.1,
+            self.2 + rhs.2,
+        )
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Add for &FheInt<T, U> {
-    type Output = FheInt<T, U>;
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>, B> Add<B> for FheInt<T, U>
+where
+    B: Borrow<Self>,
+{
+    type Output = Self;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        self.clone() + rhs.clone()
+    fn add(self, rhs: B) -> Self::Output {
+        &self + rhs
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> AddAssign for FheInt<T, U> {
-    fn add_assign(&mut self, rhs: Self) {
-        match self.0.as_mut() {
+impl<
+        T: FheIntPlaintext,
+        U: for<'a> FheIntCiphertext<'a, T> + for<'a> AddAssign<&'a U>,
+        B: Borrow<Self>,
+    > AddAssign<B> for FheInt<T, U>
+{
+    fn add_assign(&mut self, rhs: B) {
+        let rhs = rhs.borrow();
+        match &mut self.0 {
             Some(x0) => {
-                if let Some(y0) = rhs.0 {
+                if let Some(y0) = &rhs.0 {
                     *x0 += y0;
                 }
             }
             None => {
-                self.0 = rhs.0;
+                self.0 = rhs.0.clone();
             }
         }
         self.1 += rhs.1;
@@ -127,60 +150,69 @@ impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> AddAssign for FheInt<T, U> {
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Neg for FheInt<T, U> {
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Neg for &FheInt<T, U> {
     type Output = FheInt<T, U>;
 
     fn neg(self) -> Self::Output {
-        match self.0 {
-            Some(x0) => FheInt(
-                Some((-x0) + self.2.clone()),
-                -self.1 as f64 - self.2.clone().cast(),
-                self.2,
-            ),
-            None => panic!("neg is not implemented for None"),
-        }
+        FheInt(
+            self.0.as_ref().map(|x0| (-x0.clone()) + self.2),
+            -self.1 as f64 - self.2.cast(),
+            self.2,
+        )
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Neg for &FheInt<T, U> {
-    type Output = FheInt<T, U>;
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Neg for FheInt<T, U> {
+    type Output = Self;
 
     fn neg(self) -> Self::Output {
-        -self.clone()
+        -&self
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Sub for FheInt<T, U> {
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>, B> Sub<B> for &FheInt<T, U>
+where
+    B: Borrow<FheInt<T, U>>,
+{
     type Output = FheInt<T, U>;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        self + (-rhs)
+    fn sub(self, rhs: B) -> Self::Output {
+        self + (-rhs.borrow())
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> Sub for &FheInt<T, U> {
-    type Output = FheInt<T, U>;
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>, B> Sub<B> for FheInt<T, U>
+where
+    B: Borrow<Self>,
+{
+    type Output = Self;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.clone() - rhs.clone()
+    fn sub(self, rhs: B) -> Self::Output {
+        &self - rhs
     }
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T>> SubAssign for FheInt<T, U> {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self += -rhs;
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + for<'a> AddAssign<&'a U>, B>
+    SubAssign<B> for FheInt<T, U>
+where
+    B: Borrow<FheInt<T, U>>,
+{
+    fn sub_assign(&mut self, rhs: B) {
+        *self += -rhs.borrow();
     }
 }
 
 /* Wrapper trait for FheBootstrap on FheInt, to enable bootstrapping into restricted
  * domains beyond u64.
  */
-pub trait FheIntBootstrap<T: FheIntPlaintext + Cast<f64>>: Clone + Send {
+pub trait FheIntBootstrap<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap>:
+    Clone + Send
+{
     fn map<F: Fn(f64) -> u64>(&self, func: F, offset: f64, max_val: T) -> Self;
     fn apply<F: Fn(f64) -> u64>(&mut self, func: F, offset: f64, max_val: T);
 }
 
-impl<T: FheIntPlaintext, U: FheIntCiphertext<T> + FheBootstrap> FheIntBootstrap<T>
+impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheIntBootstrap<T, U>
     for FheInt<T, U>
 {
     fn map<F: Fn(f64) -> u64>(&self, func: F, offset: f64, max_val: T) -> Self {

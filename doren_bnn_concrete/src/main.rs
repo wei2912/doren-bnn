@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     let ws = vec![1, 0, -1, 1, 0, 0, 1, 0, -1];
     println!("Weights: {:?}", ws);
 
-    let c2 = multiply_and_sum(c1, &ws);
+    let c2 = multiply_and_sum(&c1, &ws);
     println!("{:?}", c2);
     let o2 = decrypt_vec(&client_key, &vec![c2]);
     println!("After multiply & sum: {:?}", o2);

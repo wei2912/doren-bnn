@@ -75,7 +75,7 @@ pub fn convert_f64_to_bin_pm(input: &[f64]) -> Vec<bool> {
     input.iter().map(|x| *x > 0.0).collect()
 }
 
-pub fn encrypt_vec_bin_pm<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
+pub fn encrypt_vec_bin_pm<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>>(
     client_key: &ClientKey,
     uint_enc: &dyn DynamicFheEncryptor<T, FheType = U>,
     pts: &[bool],
@@ -88,7 +88,7 @@ pub fn encrypt_vec_bin_pm<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
 
 pub fn try_encrypt_vec_bin_pm<
     T: FheIntPlaintext,
-    U: FheIntCiphertext<T>,
+    U: for<'a> FheIntCiphertext<'a, T>,
     E: Error + Sync + Send + 'static,
 >(
     client_key: &ClientKey,
@@ -102,7 +102,7 @@ pub fn try_encrypt_vec_bin_pm<
         .collect::<Result<Vec<_>, _>>()?)
 }
 
-pub fn decrypt_vec<T: FheIntPlaintext, U: FheIntCiphertext<T>>(
+pub fn decrypt_vec<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>>(
     client_key: &ClientKey,
     input: &[FheInt<T, U>],
 ) -> Vec<f64> {
