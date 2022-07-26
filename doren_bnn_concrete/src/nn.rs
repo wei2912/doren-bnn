@@ -1,4 +1,4 @@
-use concrete::prelude::FheBootstrap;
+use concrete::prelude::*;
 use itertools::izip;
 use rayon::prelude::*;
 
@@ -82,12 +82,10 @@ pub fn relu_batchnorm<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + F
     assert!(xs.len() == running_mean.len());
     assert!(xs.len() == running_var.len());
 
-    let relu = |x: f64| if x > 0.0 { x } else { 0.0 };
+    let relu = |x: f64| f64::max(x, 0.0);
     // g - weight (gamma), b - bias (beta), e - expectation, v - variance
     let bn = |x: f64, g: f64, b: f64, e: f64, v: f64| (x as f64 - e) / f64::sqrt(v + EPS) * g + b;
-    let sign = |x: f64| if x > 0.0 { 2 } else { 0 };
-    let offset = -1.0;
-    let max_val = 2;
+    let sign = |x: f64| if x > 0.0 { 1 } else { 0 };
 
     let f = |x, g, b, e, v| sign(bn(relu(x), g, b, e, v));
 
@@ -101,7 +99,7 @@ pub fn relu_batchnorm<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + F
             let x_clone = (*xs)[i].clone();
             drop(xs); // release lock on xs before end of scope for other threads
 
-            x_clone.map(|y| f(y, g, b, e, v), offset, max_val.into())
+            x_clone.map(|y| f(y, g, b, e, v), 2.0, -1.0)
         })
         .collect::<Vec<_>>()
 }

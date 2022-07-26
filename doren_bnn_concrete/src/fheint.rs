@@ -5,25 +5,57 @@ use std::borrow::Borrow;
 use std::fmt::{Debug, Error, Formatter};
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
-/* Define a new trait for primitive casting which might cause loss in precision. */
-pub trait Cast<T> {
+fn unimplemented_add_diff_weights() {
+    unimplemented!("addition of ciphertexts with different non-zero weights is not supported");
+}
+
+/* Trait for primitive casting which might cause loss in precision. */
+pub trait CastInto<T> {
     fn cast(self) -> T;
 }
 
-impl Cast<f64> for u8 {
+impl CastInto<f64> for u8 {
     fn cast(self) -> f64 {
         self as f64
     }
 }
 
-impl Cast<f64> for u64 {
+impl CastInto<f64> for u64 {
     fn cast(self) -> f64 {
         self as f64
+    }
+}
+
+/* Trait for primitive casting which may be fallible with overflow. */
+pub trait CastFrom<T>: Sized {
+    fn cast_from(_: T) -> Self;
+}
+
+impl CastFrom<u64> for u8 {
+    fn cast_from(x: u64) -> u8 {
+        if x > u8::MAX.into() {
+            panic!("x is not in the range of [0, u8::MAX]");
+        }
+        x as u8
+    }
+}
+
+impl CastFrom<u64> for u64 {
+    fn cast_from(x: u64) -> u64 {
+        x
     }
 }
 
 pub trait FheIntPlaintext:
-    From<u8> + Cast<f64> + Add<Output = Self> + AddAssign + Copy + Clone + Debug + Send
+    CastFrom<u64>
+    + Into<u64>
+    + CastInto<f64>
+    + Add<Output = Self>
+    + AddAssign
+    + Copy
+    + Clone
+    + Debug
+    + Send
 {
 }
 
@@ -50,48 +82,73 @@ pub trait FheIntCiphertext<'a, T: FheIntPlaintext>:
 impl FheIntCiphertext<'_, u8> for DynShortInt {}
 impl FheIntCiphertext<'_, u64> for DynInteger {}
 
-/* Wrapper struct for FHE unsigned integers with an f64 offset, added to the plaintext
- * upon decryption, and a max value.
+/* Wrapper struct for FHE unsigned integers with a f64 weight and bias, used to
+ * transform the plaintext upon decryption, and a max value.
  *
- * The offset and max value is used to maintain the invariant that the ciphertext
- * represents an integer in the range [0, max value].
+ * The ciphertext should always encrypt an integer in the range [0, max_value].
+ * TODO: Error checking to ensure above invariant holds.
  */
 #[derive(Clone)]
-pub struct FheInt<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>>(Option<U>, f64, T);
+pub struct FheInt<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> {
+    ct_opt: Option<U>,
+    weight: f64,
+    bias: f64,
+    max_pt: T,
+}
 
 impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> FheInt<T, U> {
     pub fn zero() -> Self {
-        FheInt(None, 0.0, 0.into())
-    }
-
-    pub fn zero_with_offset(x: f64) -> Self {
-        FheInt(None, x, 0.into())
+        FheInt {
+            ct_opt: None,
+            weight: 0.0,
+            bias: 0.0,
+            max_pt: T::cast_from(0),
+        }
     }
 
     pub fn encrypt_bin_pm<F: Fn(T) -> U>(enc_func: F, pt: bool) -> Self {
-        let ct = enc_func(if pt { 2.into() } else { 0.into() });
-        FheInt(Some(ct), -1.0, 2.into())
+        let ct = enc_func(T::cast_from(pt as u64));
+        FheInt {
+            ct_opt: Some(ct),
+            weight: 2.0,
+            bias: -1.0,
+            max_pt: T::cast_from(1),
+        }
     }
 
-    pub fn try_encrypt_bin_pm<E, F: Fn(T) -> Result<U, E>>(
+    pub fn try_encrypt_bin_pm<E: std::fmt::Debug, F: Fn(T) -> Result<U, E>>(
         try_enc_func: F,
         pt: bool,
     ) -> Result<Self, E> {
-        let ct = try_enc_func(if pt { 2.into() } else { 0.into() })?;
-        Ok(FheInt(Some(ct), -1.0, 2.into()))
+        let ct = try_enc_func(T::cast_from(pt as u64))?;
+        Ok(FheInt {
+            ct_opt: Some(ct),
+            weight: 2.0,
+            bias: -1.0,
+            max_pt: T::cast_from(1),
+        })
     }
 
     pub fn decrypt(&self, client_key: &ClientKey) -> f64 {
-        let FheInt(opt, offset, _) = self;
-        opt.as_ref()
-            .map_or_else(|| 0.0, |ct| ct.decrypt(client_key).cast())
-            + offset
+        let FheInt {
+            ct_opt,
+            weight,
+            bias,
+            ..
+        } = self;
+        ct_opt
+            .to_owned()
+            .map_or_else(|| *bias, |ct| weight * ct.decrypt(client_key).cast() + bias)
     }
 }
 
 impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Debug for FheInt<T, U> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "(?, {:?}, {:?})", self.1, self.2)
+        write!(
+            f,
+            "({:?} * [0, {:?}] + {:?})",
+            self.weight, self.max_pt, self.bias,
+        )
     }
 }
 
@@ -103,16 +160,21 @@ where
 
     fn add(self, rhs: B) -> Self::Output {
         let rhs = rhs.borrow();
-        FheInt(
-            match (&self.0, &rhs.0) {
-                (Some(x0), Some(y0)) => Some(x0.clone() + y0.clone()),
-                (Some(x0), None) => Some(x0.clone()),
-                (None, Some(y0)) => Some(y0.clone()),
+        if self.weight != 0.0 && rhs.weight != 0.0 && self.weight != rhs.weight {
+            unimplemented_add_diff_weights();
+        }
+
+        FheInt {
+            ct_opt: match (&self.ct_opt, &rhs.ct_opt) {
+                (Some(ct0), Some(ct1)) => Some(ct0.clone() + ct1.clone()),
+                (Some(ct0), None) => Some(ct0.clone()),
+                (None, Some(ct1)) => Some(ct1.clone()),
                 (None, None) => None,
             },
-            self.1 + rhs.1,
-            self.2 + rhs.2,
-        )
+            weight: f64::max(self.weight, rhs.weight),
+            bias: self.bias + rhs.bias,
+            max_pt: self.max_pt + rhs.max_pt,
+        }
     }
 }
 
@@ -135,18 +197,24 @@ impl<
 {
     fn add_assign(&mut self, rhs: B) {
         let rhs = rhs.borrow();
-        match &mut self.0 {
-            Some(x0) => {
-                if let Some(y0) = &rhs.0 {
-                    *x0 += y0;
+        if self.weight != 0.0 && rhs.weight != 0.0 && self.weight != rhs.weight {
+            unimplemented_add_diff_weights();
+        }
+
+        match self.ct_opt.as_mut() {
+            Some(ct0) => match &rhs.ct_opt {
+                Some(ct1) => {
+                    *ct0 += ct1;
                 }
-            }
+                None => {}
+            },
             None => {
-                self.0 = rhs.0.clone();
+                self.ct_opt = rhs.ct_opt.clone();
             }
         }
-        self.1 += rhs.1;
-        self.2 += rhs.2;
+        self.weight = f64::max(self.weight, rhs.weight);
+        self.bias += rhs.bias;
+        self.max_pt += rhs.max_pt;
     }
 }
 
@@ -154,11 +222,15 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Neg for &FheInt<T, 
     type Output = FheInt<T, U>;
 
     fn neg(self) -> Self::Output {
-        FheInt(
-            self.0.as_ref().map(|x0| (-x0.clone()) + self.2),
-            -self.1 as f64 - self.2.cast(),
-            self.2,
-        )
+        FheInt {
+            ct_opt: self
+                .ct_opt
+                .as_ref()
+                .map(|ct| (-ct.clone()) + self.max_pt.clone()),
+            weight: self.weight,
+            bias: -self.bias - self.weight * self.max_pt.cast(),
+            max_pt: self.max_pt,
+        }
     }
 }
 
@@ -208,30 +280,53 @@ where
 pub trait FheIntBootstrap<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap>:
     Clone + Send
 {
-    fn map<F: Fn(f64) -> u64>(&self, func: F, offset: f64, max_val: T) -> Self;
-    fn apply<F: Fn(f64) -> u64>(&mut self, func: F, offset: f64, max_val: T);
+    fn map<F: Fn(f64) -> u64>(&self, func: F, weight: f64, bias: f64) -> Self;
+    fn apply<F: Fn(f64) -> u64>(&mut self, func: F, weight: f64, bias: f64);
 }
 
 impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheIntBootstrap<T, U>
     for FheInt<T, U>
 {
-    fn map<F: Fn(f64) -> u64>(&self, func: F, offset: f64, max_val: T) -> Self {
-        match &self.0 {
-            Some(ct) => FheInt(Some(ct.map(|pt| func(pt.cast() - self.1))), offset, max_val),
-            None => FheInt(None, offset + func(self.1).cast(), max_val),
+    fn map<F: Fn(f64) -> u64>(&self, func: F, weight: f64, bias: f64) -> Self {
+        let f = |pt: u64| -> u64 { func(self.weight * pt.cast() + self.bias) };
+
+        let f_pt_range = (0..self.max_pt.into() + 1).map(f);
+        let f_pt_max = f_pt_range.max().unwrap();
+
+        match &self.ct_opt {
+            Some(ct) => FheInt {
+                ct_opt: Some(ct.map(f)),
+                weight: weight,
+                bias: bias,
+                max_pt: T::cast_from(f_pt_max),
+            },
+            None => FheInt {
+                ct_opt: None,
+                weight: 0.0,
+                bias: weight * self.bias + bias,
+                max_pt: T::cast_from(0),
+            },
         }
     }
 
-    fn apply<F: Fn(f64) -> u64>(&mut self, func: F, offset: f64, max_val: T) {
-        match &mut self.0 {
+    fn apply<F: Fn(f64) -> u64>(&mut self, func: F, weight: f64, bias: f64) {
+        let f = |pt: u64| -> u64 { func(self.weight * pt.cast() + self.bias) };
+
+        let f_pt_range = (0..self.max_pt.into() + 1).map(f);
+        let f_pt_max = f_pt_range.max().unwrap();
+
+        match &mut self.ct_opt {
             Some(ct) => {
-                ct.apply(|pt| func(pt.cast() - self.1));
-                self.1 = offset;
-                self.2 = max_val;
+                ct.apply(f);
+                self.weight = weight;
+                self.bias = bias;
+                self.max_pt = T::cast_from(f_pt_max);
             }
             None => {
-                self.1 = offset + func(-self.1).cast();
-                self.2 = max_val;
+                self.weight = weight;
+                self.bias *= weight;
+                self.bias += bias;
+                self.max_pt = T::cast_from(f_pt_max);
             }
         };
     }

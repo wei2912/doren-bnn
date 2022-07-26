@@ -75,6 +75,10 @@ pub fn convert_f64_to_bin_pm(input: &[f64]) -> Vec<bool> {
     input.iter().map(|x| *x > 0.0).collect()
 }
 
+pub fn convert_bin_pm_to_f64(input: &[bool]) -> Vec<f64> {
+    input.iter().map(|x| if *x { -1.0 } else { 1.0 }).collect()
+}
+
 pub fn encrypt_vec_bin_pm<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>>(
     client_key: &ClientKey,
     uint_enc: &dyn DynamicFheEncryptor<T, FheType = U>,
