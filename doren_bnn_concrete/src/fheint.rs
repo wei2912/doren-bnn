@@ -11,17 +11,17 @@ fn unimplemented_add_diff_weights() {
 
 /* Trait for primitive casting which might cause loss in precision. */
 pub trait CastInto<T> {
-    fn cast(self) -> T;
+    fn cast_into(self) -> T;
 }
 
 impl CastInto<f64> for u8 {
-    fn cast(self) -> f64 {
+    fn cast_into(self) -> f64 {
         self as f64
     }
 }
 
 impl CastInto<f64> for u64 {
-    fn cast(self) -> f64 {
+    fn cast_into(self) -> f64 {
         self as f64
     }
 }
@@ -138,7 +138,7 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> FheInt<T, U> {
         } = self;
         ct_opt
             .to_owned()
-            .map_or_else(|| *bias, |ct| weight * ct.decrypt(client_key).cast() + bias)
+            .map_or_else(|| *bias, |ct| weight * ct.decrypt(client_key).cast_into() + bias)
     }
 }
 
@@ -146,7 +146,7 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Debug for FheInt<T,
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(
             f,
-            "({:?} * [0, {:?}] + {:?})",
+            "{:?} * [0, {:?}] + {:?}",
             self.weight, self.max_pt, self.bias,
         )
     }
@@ -228,7 +228,7 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> Neg for &FheInt<T, 
                 .as_ref()
                 .map(|ct| (-ct.clone()) + self.max_pt.clone()),
             weight: self.weight,
-            bias: -self.bias - self.weight * self.max_pt.cast(),
+            bias: -self.bias - self.weight * self.max_pt.cast_into(),
             max_pt: self.max_pt,
         }
     }
@@ -288,7 +288,7 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheI
     for FheInt<T, U>
 {
     fn map<F: Fn(f64) -> u64>(&self, func: F, weight: f64, bias: f64) -> Self {
-        let f = |pt: u64| -> u64 { func(self.weight * pt.cast() + self.bias) };
+        let f = |pt: u64| -> u64 { func(self.weight * pt.cast_into() + self.bias) };
 
         let f_pt_range = (0..self.max_pt.into() + 1).map(f);
         let f_pt_max = f_pt_range.max().unwrap();
@@ -303,14 +303,14 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheI
             None => FheInt {
                 ct_opt: None,
                 weight: 0.0,
-                bias: weight * self.bias + bias,
+                bias: weight * f(0).cast_into() + bias,
                 max_pt: T::cast_from(0),
             },
         }
     }
 
     fn apply<F: Fn(f64) -> u64>(&mut self, func: F, weight: f64, bias: f64) {
-        let f = |pt: u64| -> u64 { func(self.weight * pt.cast() + self.bias) };
+        let f = |pt: u64| -> u64 { func(self.weight * pt.cast_into() + self.bias) };
 
         let f_pt_range = (0..self.max_pt.into() + 1).map(f);
         let f_pt_max = f_pt_range.max().unwrap();
@@ -323,10 +323,9 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheI
                 self.max_pt = T::cast_from(f_pt_max);
             }
             None => {
-                self.weight = weight;
-                self.bias *= weight;
-                self.bias += bias;
-                self.max_pt = T::cast_from(f_pt_max);
+                self.bias = weight * f(0).cast_into() + bias;
+                self.weight = 0.0;
+                self.max_pt = T::cast_from(0);
             }
         };
     }

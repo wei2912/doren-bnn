@@ -51,23 +51,21 @@ fn toynet_py(state_dict_py: &PyDict, input: Vec<f64>) -> PyResult<Vec<f64>> {
     let block_0 = LinearState {
         weight: get_state("block.0.weight")?.extract()?,
     };
-    let block_1 = BatchNormState {
-        weight: get_state("block.1.weight")?.extract()?,
-        bias: get_state("block.1.bias")?.extract()?,
-        running_mean: get_state("block.1.running_mean")?.extract()?,
-        running_var: get_state("block.1.running_var")?.extract()?,
+    let block_2 = BatchNormState {
+        weight: get_state("block.2.weight")?.extract()?,
+        bias: get_state("block.2.bias")?.extract()?,
+        running_mean: get_state("block.2.running_mean")?.extract()?,
+        running_var: get_state("block.2.running_var")?.extract()?,
     };
 
     let input_enc = try_encrypt_vec_bin_pm(&client_key, uint4_enc, &convert_f64_to_bin_pm(&input))
         .map_err(make_error)?;
 
-    let state_dict = ToyNetState { block_0, block_1 };
-    let output_enc = toynet(state_dict, input_enc);
-
+    let state_dict = ToyNetState { block_0, block_2 };
+    let output_enc = toynet(server_key, state_dict, input_enc);
     let output_dec = decrypt_vec(client_key, &output_enc);
-    println!("{:?}", output_dec);
 
-    Ok(vec![])
+    Ok(output_dec)
 }
 
 #[pymodule]
