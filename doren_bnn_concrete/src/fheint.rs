@@ -90,10 +90,10 @@ impl FheIntCiphertext<'_, u64> for DynInteger {}
  */
 #[derive(Clone)]
 pub struct FheInt<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> {
-    ct_opt: Option<U>,
-    weight: f64,
-    bias: f64,
-    max_pt: T,
+    pub ct_opt: Option<U>,
+    pub weight: f64,
+    pub bias: f64,
+    pub max_pt: T,
 }
 
 impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> FheInt<T, U> {
@@ -103,6 +103,15 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> FheInt<T, U> {
             weight: 0.0,
             bias: 0.0,
             max_pt: T::cast_from(0),
+        }
+    }
+
+    pub fn from(ct: U, max_pt: T) -> Self {
+        FheInt {
+            ct_opt: Some(ct),
+            weight: 0.0,
+            bias: 0.0,
+            max_pt,
         }
     }
 
@@ -136,9 +145,10 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T>> FheInt<T, U> {
             bias,
             ..
         } = self;
-        ct_opt
-            .to_owned()
-            .map_or_else(|| *bias, |ct| weight * ct.decrypt(client_key).cast_into() + bias)
+        ct_opt.to_owned().map_or_else(
+            || *bias,
+            |ct| weight * ct.decrypt(client_key).cast_into() + bias,
+        )
     }
 }
 

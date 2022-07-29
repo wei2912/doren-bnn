@@ -33,7 +33,6 @@ fn multiply_and_sum_bm(c: &mut Criterion) {
     let mut group = c.benchmark_group("multiply_and_sum");
     group.sample_size(10);
 
-    // Takes ~3ms/it.
     group.bench_function("multiply_and_sum dw", |b| {
         b.iter_batched(
             || {
@@ -47,7 +46,6 @@ fn multiply_and_sum_bm(c: &mut Criterion) {
         )
     });
 
-    // Takes ~7.5mins/it.
     group.bench_function("multiply_and_sum pw", |b| {
         b.iter_batched(
             || {

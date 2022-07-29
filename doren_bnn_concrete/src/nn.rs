@@ -1,4 +1,4 @@
-use concrete::{set_server_key, prelude::*, ServerKey};
+use concrete::{prelude::*, set_server_key, ServerKey};
 use itertools::izip;
 use rayon::prelude::*;
 
@@ -69,7 +69,10 @@ pub struct BatchNormState {
 
 const EPS: f64 = 1e-5;
 
-pub fn relu_batchnorm_sign<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap>(
+pub fn relu_batchnorm_sign<
+    T: FheIntPlaintext,
+    U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap,
+>(
     server_key: &ServerKey,
     xs: &[FheInt<T, U>],
     state: BatchNormState,
@@ -88,7 +91,7 @@ pub fn relu_batchnorm_sign<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T
     let relu = |x| f64::max(x, 0.0);
     // g - weight (gamma), b - bias (beta), e - expectation, v - variance
     let bn = |x, g, b, e, v| (x - e) / f64::sqrt(v + EPS) * g + b;
-    let sign = |x| if x > 0.0 { 1 } else { 0 };
+    let sign = |x| (x > 0.0) as u64;
 
     let f = |x, g, b, e, v| sign(bn(relu(x), g, b, e, v));
 
@@ -103,11 +106,7 @@ pub fn relu_batchnorm_sign<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T
             drop(xs); // release lock on xs before end of scope for other threads
 
             set_server_key(server_key.clone());
-            x_clone.map(|y| {
-                let output = f(y, g, b, e, v);
-                println!("{:?} {:?}", y, output);
-                output
-            }, 2.0, -1.0)
+            x_clone.map(|y| f(y, g, b, e, v), 2.0, -1.0)
         })
         .collect::<Vec<_>>()
 }
