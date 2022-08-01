@@ -42,7 +42,7 @@ pub struct LinearState {
 pub fn linear<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + for<'a> AddAssign<&'a U>>(
     server_key: &ServerKey,
     xs: &[FheInt<T, U>],
-    state: LinearState,
+    state: &LinearState,
 ) -> Vec<FheInt<T, U>> {
     let xs_arc = Arc::new(Mutex::new(xs.to_vec()));
     let LinearState { weight: wss } = state;
@@ -75,7 +75,7 @@ pub fn relu_batchnorm_sign<
 >(
     server_key: &ServerKey,
     xs: &[FheInt<T, U>],
-    state: BatchNormState,
+    state: &BatchNormState,
 ) -> Vec<FheInt<T, U>> {
     let BatchNormState {
         weight,

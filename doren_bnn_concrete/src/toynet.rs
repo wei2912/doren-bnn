@@ -13,7 +13,7 @@ pub fn toynet(
     input: Vec<FheInt<u8, DynShortInt>>,
 ) -> Vec<FheInt<u8, DynShortInt>> {
     let ToyNetState { block_0, block_2 } = state_dict;
-    let block_0_output = linear(server_key, &input, block_0);
-    let block_1_output = relu_batchnorm_sign(server_key, &block_0_output, block_2);
+    let block_0_output = linear(server_key, &input, &block_0);
+    let block_1_output = relu_batchnorm_sign(server_key, &block_0_output, &block_2);
     block_1_output
 }
