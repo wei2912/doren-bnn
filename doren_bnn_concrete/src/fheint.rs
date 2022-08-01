@@ -300,21 +300,22 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheI
     fn map<F: Fn(f64) -> u64>(&self, func: F, weight: f64, bias: f64) -> Self {
         let f = |pt: u64| -> u64 { func(self.weight * pt.cast_into() + self.bias) };
 
-        let f_pt_range = (0..self.max_pt.into() + 1).map(f);
-        let f_pt_max = f_pt_range.max().unwrap();
+        let f_pt_range = (0..self.max_pt.into() + 1).map(f).collect::<Vec<_>>();
+        let f_pt_min = *f_pt_range.iter().min().unwrap();
+        let f_pt_max = *f_pt_range.iter().max().unwrap();
 
-        match &self.ct_opt {
-            Some(ct) => FheInt {
-                ct_opt: Some(ct.map(f)),
-                weight: weight,
-                bias: bias,
-                max_pt: T::cast_from(f_pt_max),
-            },
-            None => FheInt {
+        match (f_pt_max - f_pt_min, &self.ct_opt) {
+            (0, _) | (_, None) => FheInt {
                 ct_opt: None,
                 weight: 0.0,
                 bias: weight * f(0).cast_into() + bias,
                 max_pt: T::cast_from(0),
+            },
+            (_, Some(ct)) => FheInt {
+                ct_opt: Some(ct.map(|pt| f(pt) - f_pt_min)),
+                weight: weight,
+                bias: bias + f_pt_min.cast_into(),
+                max_pt: T::cast_from(f_pt_max - f_pt_min),
             },
         }
     }
@@ -322,20 +323,21 @@ impl<T: FheIntPlaintext, U: for<'a> FheIntCiphertext<'a, T> + FheBootstrap> FheI
     fn apply<F: Fn(f64) -> u64>(&mut self, func: F, weight: f64, bias: f64) {
         let f = |pt: u64| -> u64 { func(self.weight * pt.cast_into() + self.bias) };
 
-        let f_pt_range = (0..self.max_pt.into() + 1).map(f);
-        let f_pt_max = f_pt_range.max().unwrap();
+        let f_pt_range = (0..self.max_pt.into() + 1).map(f).collect::<Vec<_>>();
+        let f_pt_min = *f_pt_range.iter().min().unwrap();
+        let f_pt_max = *f_pt_range.iter().max().unwrap();
 
-        match &mut self.ct_opt {
-            Some(ct) => {
-                ct.apply(f);
-                self.weight = weight;
-                self.bias = bias;
-                self.max_pt = T::cast_from(f_pt_max);
-            }
-            None => {
+        match (f_pt_max - f_pt_min, &mut self.ct_opt) {
+            (0, _) | (_, None) => {
                 self.bias = weight * f(0).cast_into() + bias;
                 self.weight = 0.0;
                 self.max_pt = T::cast_from(0);
+            }
+            (_, Some(ct)) => {
+                ct.apply(|pt| f(pt) - f_pt_min);
+                self.weight = weight;
+                self.bias = bias + f_pt_min.cast_into();
+                self.max_pt = T::cast_from(f_pt_max - f_pt_min);
             }
         };
     }
