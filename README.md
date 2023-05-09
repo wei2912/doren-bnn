@@ -1,6 +1,8 @@
 # doren-bnn
 
-DOReN-inspired Binary Neural Network architecture.
+PyTorch framework for building, testing and benchmarking Binarised Neural Networks (BNNs), which can be converted into Fully Homomorphic Encryption (FHE) versions to be executed on [CONCRETE](https://www.zama.ai/concrete-framework).
+
+**Warning**: Much of the code pertaining to FHE is not functional, due to issues with [bootstrapping in CONCRETE](https://docs.zama.ai/concrete/v/0.1/advanced-operations/bootstrapping-a-ciphertext). Future versions of CONCRETE may address this problem, but would require significant modifications to the code.
 
 ## Development Setup
 
